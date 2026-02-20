@@ -1,0 +1,10 @@
+spec.md
+# Python related
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Datasets and postprocess outputs
+dataset/
+postprocess_results/
