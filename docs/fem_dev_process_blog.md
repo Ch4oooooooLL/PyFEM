@@ -7,6 +7,7 @@
 
 目标不是写成论文，而是把“从公式到代码”的路径讲清楚。
 
+
 ---
 
 ## 0. 项目做了什么
@@ -35,13 +36,13 @@ PyFEM_Dynamics/
 
 离散后，静力和动力方程分别是：
 
-\[
+$$
 \mathbf{K}\mathbf{U}=\mathbf{F}
-\]
+$$
 
-\[
+$$
 \mathbf{M}\ddot{\mathbf{U}}+\mathbf{C}\dot{\mathbf{U}}+\mathbf{K}\mathbf{U}=\mathbf{F}(t)
-\]
+$$
 
 ### 1.2 数值处理
 
@@ -75,12 +76,12 @@ dofs_per_node = 3 if has_beam else 2
 ### 2.1 基本公式
 
 模型里最关键的参数是：
-- 弹性模量 \(E\)
-- 密度 \(\rho\)
-- 截面面积 \(A\)
-- 惯性矩 \(I\)
+- 弹性模量 $E$
+- 密度 $\rho$
+- 截面面积 $A$
+- 惯性矩 $I$
 
-例如，桁架轴向刚度是 \(EA/L\)，梁弯曲刚度与 \(EI\) 有关。
+例如，桁架轴向刚度是 $\frac{EA}{L}$，梁弯曲刚度与 $EI$ 有关。
 
 ### 2.2 数值处理
 
@@ -114,9 +115,9 @@ class Section:
 
 桁架单元只考虑轴向：
 
-\[
+$$
 k=\frac{EA}{L}
-\]
+$$
 
 ### 数值处理
 
@@ -146,15 +147,15 @@ if lumping:
 
 ### 公式
 
-梁单元每个节点有 3 个自由度（\(u,v,\theta\)），弯曲部分常用系数：
+梁单元每个节点有 3 个自由度（$u,v,\theta$），弯曲部分常用系数：
 
-\[
+$$
 \frac{12EI}{L^3},\;\frac{6EI}{L^2},\;\frac{4EI}{L},\;\frac{2EI}{L}
-\]
+$$
 
 ### 数值处理
 
-按标准 6x6 梁单元模板实现。
+按标准 $6\times 6$ 梁单元模板实现。
 
 ### 关键代码
 
@@ -171,14 +172,14 @@ k_v4 = 2 * E * I / L
 
 ### 4.1 基本公式
 
-\[
+$$
 \mathbf{K}^e_g = \mathbf{T}^\mathsf{T}\mathbf{K}^e_l\mathbf{T},\quad
 \mathbf{M}^e_g = \mathbf{T}^\mathsf{T}\mathbf{M}^e_l\mathbf{T}
-\]
+$$
 
 ### 4.2 数值处理
 
-先算单元方向角，再构造变换矩阵 \(\mathbf{T}\)。
+先算单元方向角，再构造变换矩阵 $\mathbf{T}$。
 
 ### 4.3 关键代码
 
@@ -194,11 +195,11 @@ return T.T @ k_local @ T
 
 ### 5.1 基本公式
 
-\[
+$$
 \mathbf{K}=\sum_e \mathbf{L}_e^\mathsf{T}\mathbf{K}^e\mathbf{L}_e,
 \quad
 \mathbf{M}=\sum_e \mathbf{L}_e^\mathsf{T}\mathbf{M}^e\mathbf{L}_e
-\]
+$$
 
 ### 5.2 数值处理
 
@@ -221,7 +222,7 @@ return K_global.tocsc()
 
 ### 6.1 基本公式
 
-静力是 \(\mathbf{F}\)，动力是 \(\mathbf{F}(t)\)。
+静力是 $\mathbf{F}$，动力是 $\mathbf{F}(t)$。
 
 ### 6.2 数值处理
 
@@ -282,9 +283,9 @@ F_mod[dof] = val
 
 ### 8.1 基本公式
 
-\[
+$$
 \mathbf{K}_{mod}\mathbf{U}=\mathbf{F}_{mod}
-\]
+$$
 
 ### 8.2 数值处理
 
@@ -313,20 +314,20 @@ axial_force = f_local[2]
 
 阻尼矩阵：
 
-\[
+$$
 \mathbf{C}=\alpha\mathbf{M}+\beta\mathbf{K}
-\]
+$$
 
 每步等效刚度：
 
-\[
+$$
 \hat{\mathbf{K}} = \mathbf{K}+a_0\mathbf{M}+a_1\mathbf{C}
-\]
+$$
 
 ### 9.2 数值处理
 
 - 先算初始加速度
-- \(\hat{K}\) 只分解一次（LU）
+- $\hat{\mathbf{K}}$ 只分解一次（LU）
 - 每步回代更新位移、速度、加速度
 
 ### 9.3 关键代码
@@ -353,11 +354,11 @@ v_next = v_prev + a6 * a_prev + a7 * a_next
 
 把损伤简化为弹性模量退化：
 
-\[
+$$
 E_d = \eta E_0,\quad \eta\in[0.5, 0.9]
-\]
+$$
 
-每个样本随机损伤 1~3 个单元，然后做完整动力分析。
+每个样本随机损伤 $1\text{--}3$ 个单元，然后做完整动力分析。
 
 ### 10.2 数值处理
 

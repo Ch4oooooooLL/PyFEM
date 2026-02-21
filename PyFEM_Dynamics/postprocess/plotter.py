@@ -209,3 +209,53 @@ class Plotter:
             plt.show()
             
         plt.close(fig)
+
+    @staticmethod
+    def plot_truss_vm_frame(
+        nodes: List[Node],
+        elements: List[TrussElement2D],
+        vm_values: np.ndarray,
+        title: str,
+        save_path: str,
+        vmin: Optional[float] = None,
+        vmax: Optional[float] = None,
+    ):
+        """
+        绘制桁架单元 von Mises 应力(近似)云图单帧。
+        """
+        if len(elements) != len(vm_values):
+            raise ValueError("vm_values length must match number of elements")
+
+        for element in elements:
+            if not isinstance(element, TrussElement2D):
+                raise NotImplementedError("plot_truss_vm_frame only supports TrussElement2D")
+
+        fig, ax = plt.subplots(figsize=(8, 6))
+        cmap = plt.cm.viridis
+        vmin = np.min(vm_values) if vmin is None else vmin
+        vmax = np.max(vm_values) if vmax is None else vmax
+        if np.isclose(vmin, vmax):
+            vmax = vmin + 1.0
+        norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
+
+        for idx, element in enumerate(elements):
+            x_coords = [element.node1.x, element.node2.x]
+            y_coords = [element.node1.y, element.node2.y]
+            color = cmap(norm(vm_values[idx]))
+            ax.plot(x_coords, y_coords, "-", color=color, linewidth=2.2)
+
+        ax.scatter([n.x for n in nodes], [n.y for n in nodes], s=20, c="black", zorder=3)
+        ax.set_aspect("equal", "box")
+        ax.set_xlabel("X Coordinate (m)")
+        ax.set_ylabel("Y Coordinate (m)")
+        ax.set_title(title)
+        ax.grid(True, alpha=0.35, linestyle="--")
+
+        sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+        sm.set_array([])
+        cbar = fig.colorbar(sm, ax=ax, fraction=0.046, pad=0.04)
+        cbar.set_label("von Mises Stress (Pa)", rotation=270, labelpad=16)
+
+        plt.tight_layout()
+        plt.savefig(save_path)
+        plt.close(fig)

@@ -5,21 +5,25 @@ from solver.boundary import BoundaryCondition
 from solver.integrator import StaticSolver
 from postprocess.plotter import Plotter
 from core.io_parser import IOParser
+from core.element import TrussElement2D
 
-def run_single_static_test(material_file=None, model_file=None):
+def run_single_static_test(material_file=None, structure_file=None, static_load_file=None):
     """
-    运行单个静态测试验证，自动读取传入模型文件。
+    运行单个静态测试验证，读取结构文件与静载文件。
     """
     if material_file is None:
         material_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "materials.csv")
-    if model_file is None:
-        model_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static_input.txt")
+    if structure_file is None:
+        structure_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "structure_input.txt")
+    if static_load_file is None:
+        static_load_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static_loads.txt")
         
     print("开始运行静力分析测试...")
     
-    # 1. 读取基础材料和模型
+    # 1. 读取基础材料、结构和静载
     materials = IOParser.load_materials(material_file)
-    nodes, elements, bcs_local, loads_local, _, _ = IOParser.load_model(model_file, materials)
+    nodes, elements, bcs_local, _ = IOParser.load_structure(structure_file, materials)
+    static_loads = IOParser.load_static_loads(static_load_file)
     
     # 初始化
     total_dofs = sum(len(n.dofs) for n in nodes)
@@ -29,12 +33,16 @@ def run_single_static_test(material_file=None, model_file=None):
     assembler = Assembler(elements, total_dofs=total_dofs)
     K = assembler.assemble_K()
     
-    # 3. 处理外部静力载荷 F
+    # 3. 处理外部静力载荷 F (Fx/Fy)
     F = np.zeros(total_dofs)
-    for nid, ldof, val in loads_local:
-        if nid in nodes_dict and ldof < len(nodes_dict[nid].dofs):
-            gdof = nodes_dict[nid].dofs[ldof]
-            F[gdof] += val
+    for nid, fx, fy in static_loads:
+        if nid not in nodes_dict:
+            raise ValueError(f"Static load references undefined node: {nid}")
+        if len(nodes_dict[nid].dofs) < 2:
+            raise ValueError(f"Node {nid} does not have ux/uy dofs")
+
+        F[nodes_dict[nid].dofs[0]] += fx
+        F[nodes_dict[nid].dofs[1]] += fy
     
     # 4. 边界处理
     bc = BoundaryCondition()
@@ -53,17 +61,23 @@ def run_single_static_test(material_file=None, model_file=None):
     for i, n in enumerate(nodes):
         print(f"节点 {n.node_id} (u_x, u_y): ({U[n.dofs[0]]:.4e} m, {U[n.dofs[1]]:.4e} m)")
         
-    # 计算每个单元的轴力以用于染色
-    axial_forces = np.zeros(len(elements))
+    # 计算桁架单元的轴力以用于染色
+    axial_forces = np.zeros(len(elements), dtype=float)
+    has_only_truss = True
     for i, el in enumerate(elements):
-        # f = K_local * T * U_element
-        u_el = np.array([U[el.node1.dofs[0]], U[el.node1.dofs[1]], U[el.node2.dofs[0]], U[el.node2.dofs[1]]])
-        T = el.get_transformation_matrix()
-        k_local = el.get_local_stiffness()
-        f_local = k_local @ (T @ u_el)
-        # 轴向力取 f_local[2] 对应于节点2的轴向力
-        axial_forces[i] = f_local[2]
-        print(f"单元 {el.element_id} 轴力: {axial_forces[i]:.2f} N")
+        if isinstance(el, TrussElement2D):
+            u_el = np.array([
+                U[el.node1.dofs[0]], U[el.node1.dofs[1]],
+                U[el.node2.dofs[0]], U[el.node2.dofs[1]]
+            ])
+            T = el.get_transformation_matrix()
+            k_local = el.get_local_stiffness()
+            f_local = k_local @ (T @ u_el)
+            axial_forces[i] = f_local[2]
+            print(f"单元 {el.element_id} 轴力: {axial_forces[i]:.2f} N")
+        else:
+            has_only_truss = False
+            print(f"单元 {el.element_id} 非 Truss2D，跳过轴力后处理。")
 
     # 生成静力变形图
     output_dir = "postprocess_results"
@@ -73,7 +87,7 @@ def run_single_static_test(material_file=None, model_file=None):
     print("\n正在生成结构变形图...")
     Plotter.setup_paper_style()
     Plotter.plot_structure(nodes, elements, U=U, scale_factor=500.0, 
-                           element_colors=axial_forces, 
+                           element_colors=axial_forces if has_only_truss else None,
                            title="Truss Static Deformation (Displacement x500)",
                            save_path=os.path.join(output_dir, "static_deformation.png"))
                            

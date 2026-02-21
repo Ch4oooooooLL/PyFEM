@@ -1,0 +1,5 @@
+# 静载定义文件 (static_loads.txt)
+# 格式: SLOAD, node_id, Fx, Fy
+
+SLOAD, 3, 10000.0, -25000.0
+SLOAD, 4, 0.0, -30000.0
