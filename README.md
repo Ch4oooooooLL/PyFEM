@@ -1,7 +1,10 @@
 # PyFEM-Dynamics 二维结构动力学有限元程序
 
 ## 1. 简介
-本程序是一个使用 Python 编写的二维有限元求解器，主要用于学习计算桁架和梁结构的静力与动力响应。本程序是为了数据驱动的结构健康监测研究提供基于物理模型的仿真计算结果。程序主要包含结构有限元建模、静/动力学求解以及结果后处理可视化模块。
+本程序是一个使用 Python 编写的二维有限元求解器，主要用于学习计算桁架和梁结构的静力与动力响应。本程序为数据驱动结构健康监测研究提供基于物理模型的仿真数据。当前仓库由两部分组成：
+
+1. `PyFEM_Dynamics/`：有限元建模、静/动力学求解、后处理可视化。
+2. `deep_learning/`：基于仿真数据的损伤识别模型训练（LSTM / PINN）与结果分析。
 
 ## 2. 力学原理与数值方法
 
@@ -60,9 +63,9 @@ $$
 程序支持两套输入体系：
 
 ### 体系一：传统格式（兼容旧版）
+- `materials.csv`：材料参数（E、rho）
 - `structure_input.txt`：结构、拓扑和边界条件
 - `static_loads.txt`：静载分量
-- `dynamic_loads.txt`：动载范围配置
 
 详细格式见 `INPUT_FORMAT.md`。
 
@@ -74,14 +77,37 @@ $$
 **入口文件：**
 - 静力验证：`PyFEM_Dynamics/main.py`
 - 数据集生成：`PyFEM_Dynamics/pipeline/data_gen.py`
+- 深度学习训练：`deep_learning/train.py`
+- 训练结果后处理：`deep_learning/utils/visualization.py`
+
+**运行示例：**
+
+```bash
+# 1) 静力验证
+python PyFEM_Dynamics/main.py
+
+# 2) 批量生成训练数据（dataset/train.npz）
+python PyFEM_Dynamics/pipeline/data_gen.py
+
+# 3) 训练深度学习模型
+pip install -r deep_learning/requirements.txt
+python deep_learning/train.py --model both --epochs 100 --threshold 0.95
+
+# 4) 生成训练结果可视化报告
+python deep_learning/utils/visualization.py --checkpoints_dir deep_learning/checkpoints --aggregate_all
+```
 
 **输出格式：**
-- 统一NPZ文件：`dataset/train.npz`
+- 统一 NPZ 文件：`dataset/train.npz`
   - `load`: (N, T, DOF) - 载荷时程
   - `E`: (N, elem) - 弹性模量
   - `disp`: (N, T, DOF) - 位移响应
   - `stress`: (N, T, elem) - 应力响应
   - `damage`: (N, elem) - 损伤标签
+- 训练输出：
+  - 权重文件：`deep_learning/checkpoints/*.pth`
+  - 指标文件：`deep_learning/checkpoints/results_*.json`
+  - 可视化报告：`deep_learning/figures/report_*/`
 
 ## 4. 算例与结果展示
 
@@ -89,8 +115,28 @@ $$
 
 **1. 静力分析演示：桁架受载变形与轴力分布**
 模型计算后，利用内置方法通过不同颜色深浅或色系隐式映射了每个单元内部的轴引力或压力，并可以在图形上将小变形按照给定缩放因子进行放大，直观呈现节点变位：
-![static_deformation](docs/images/static_deformation.png)
+![static_deformation](docs/images/supervisor/static_deformation.png)
 
 **2. 动力参数化抽样：位移-应力数据集与 VM 云图**
-批量流程会输出每样本位移 CSV（`time_step,time,node_id,ux,uy`）和应力 CSV（`sigma_axial,sigma_vm`），并可按配置导出 VM 全时程抽帧云图用于可视化检查。
+批量流程会输出每样本位移/应力数据，并可导出 VM 全时程抽帧云图用于可视化检查：
+
+![vm_cloud_frame](docs/images/supervisor/vm_cloud_frame_100.png)
+
+**3. 深度学习训练效果展示（LSTM / PINN）**
+
+LSTM 训练曲线：
+
+![lstm_history](docs/images/supervisor/lstm_history.png)
+
+PINN 训练曲线：
+
+![pinn_history](docs/images/supervisor/pinn_history.png)
+
+测试集综合指标对比：
+
+![model_comparison](docs/images/supervisor/model_comparison.png)
+
+跨运行稳定性（95% CI）：
+
+![run_stability](docs/images/supervisor/run_stability.png)
 
