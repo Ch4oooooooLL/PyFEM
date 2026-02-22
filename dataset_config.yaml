@@ -1,0 +1,42 @@
+structure_file: structure.yaml
+output_file: dataset/train.npz
+
+time:
+  dt: 0.01
+  total_time: 2.0
+
+generation:
+  num_samples: 2000
+  random_seed: 42
+
+damage:
+  enabled: true
+  min_damaged_elements: 1
+  max_damaged_elements: 3
+  reduction_range: [0.5, 0.9]
+
+load_generation:
+  mode: "random"
+  loads:
+    - node_id: 3
+      dof: "fx"
+      pattern: "pulse"
+      F0_range: [5000, 15000]
+      t_start_range: [0.0, 0.1]
+      t_end_range: [0.2, 0.4]
+    - node_id: 3
+      dof: "fy"
+      pattern: "pulse"
+      F0_range: [-30000, -10000]
+      t_start_range: [0.0, 0.1]
+      t_end_range: [0.2, 0.4]
+    - node_id: 4
+      dof: "fy"
+      pattern: "half_sine"
+      F0_range: [-20000, -5000]
+      t_start_range: [0.1, 0.3]
+      t_end_range: [0.4, 0.7]
+
+damping:
+  alpha: 0.1
+  beta: 0.01

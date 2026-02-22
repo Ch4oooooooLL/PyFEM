@@ -1,6 +1,9 @@
 import csv
 from dataclasses import dataclass
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
+
+import numpy as np
+import yaml
 
 from core.element import BeamElement2D, Element2D, TrussElement2D
 from core.material import Material
@@ -237,3 +240,106 @@ class IOParser:
                 specs.append(spec)
 
         return specs, configs
+
+
+@dataclass
+class StructureData:
+    node_coords: np.ndarray
+    element_conn: np.ndarray
+    E_base: np.ndarray
+    rho: np.ndarray
+    A: np.ndarray
+    I: np.ndarray
+    bc_mask: np.ndarray
+    bc_values: np.ndarray
+    num_nodes: int
+    num_elements: int
+    num_dofs: int
+    dofs_per_node: int
+
+
+class YAMLParser:
+    """
+    YAML格式的结构定义和数据集配置解析器。
+    """
+
+    @staticmethod
+    def load_structure_yaml(file_path: str) -> StructureData:
+        """
+        从YAML文件加载结构定义。
+        返回StructureData对象，包含结构的数值矩阵表示。
+        """
+        with open(file_path, 'r', encoding='utf-8') as f:
+            data = yaml.safe_load(f)
+        
+        meta = data['metadata']
+        nodes_data = data['nodes']
+        elements_data = data['elements']
+        boundary_data = data.get('boundary', [])
+        
+        num_nodes = len(nodes_data)
+        num_elements = len(elements_data)
+        dofs_per_node = meta.get('dofs_per_node', 2)
+        num_dofs = num_nodes * dofs_per_node
+        
+        node_coords = np.zeros((num_nodes, 2), dtype=float)
+        element_conn = np.zeros((num_elements, 2), dtype=int)
+        E_base = np.zeros(num_elements, dtype=float)
+        rho = np.zeros(num_elements, dtype=float)
+        A = np.zeros(num_elements, dtype=float)
+        I = np.zeros(num_elements, dtype=float)
+        
+        nodes_dict = {}
+        for node in nodes_data:
+            nid = node['id']
+            nodes_dict[nid] = node
+            node_coords[nid, 0] = node['coords'][0]
+            node_coords[nid, 1] = node['coords'][1]
+        
+        for elem in elements_data:
+            eid = elem['id']
+            element_conn[eid, 0] = elem['nodes'][0]
+            element_conn[eid, 1] = elem['nodes'][1]
+            E_base[eid] = elem['E']
+            rho[eid] = elem['rho']
+            A[eid] = elem['A']
+            I[eid] = elem.get('I', 0.0)
+        
+        bc_mask = np.zeros(num_dofs, dtype=bool)
+        bc_values = np.zeros(num_dofs, dtype=float)
+        
+        for bc in boundary_data:
+            node_id = bc['node_id']
+            constraints = bc['constraints']
+            base_dof = node_id * dofs_per_node
+            
+            for constraint in constraints:
+                if constraint == 'ux':
+                    bc_mask[base_dof + 0] = True
+                elif constraint == 'uy':
+                    bc_mask[base_dof + 1] = True
+                elif constraint == 'rz':
+                    bc_mask[base_dof + 2] = True
+        
+        return StructureData(
+            node_coords=node_coords,
+            element_conn=element_conn,
+            E_base=E_base,
+            rho=rho,
+            A=A,
+            I=I,
+            bc_mask=bc_mask,
+            bc_values=bc_values,
+            num_nodes=num_nodes,
+            num_elements=num_elements,
+            num_dofs=num_dofs,
+            dofs_per_node=dofs_per_node,
+        )
+
+    @staticmethod
+    def load_dataset_config(file_path: str) -> Dict[str, Any]:
+        """
+        从YAML文件加载数据集生成配置。
+        """
+        with open(file_path, 'r', encoding='utf-8') as f:
+            return yaml.safe_load(f)

@@ -1,0 +1,29 @@
+load_patterns:
+  pulse:
+    description: "Rectangular pulse load"
+    formula: "F(t) = F0, for t_start <= t < t_end"
+    params: [F0, t_start, t_end]
+    
+  harmonic:
+    description: "Sinusoidal harmonic load"
+    formula: "F(t) = F0 * sin(2*pi*f*t)"
+    params: [F0, freq]
+    
+  half_sine:
+    description: "Half-sine pulse"
+    formula: "F(t) = F0 * sin(pi*(t-t_start)/(t_end-t_start)), for t_start <= t < t_end"
+    params: [F0, t_start, t_end]
+    
+  ramp:
+    description: "Linear ramp load"
+    formula: "F(t) = F0 * (t - t_start) / t_ramp, for t_start <= t < t_start + t_ramp"
+    params: [F0, t_start, t_ramp]
+    
+  gaussian:
+    description: "Gaussian impact pulse"
+    formula: "F(t) = F0 * exp(-0.5*((t-t0)/sigma)^2)"
+    params: [F0, t0, sigma]
+
+dof_mapping:
+  ux: 0
+  uy: 1

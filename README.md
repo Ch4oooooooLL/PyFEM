@@ -56,16 +56,32 @@ $$
 `pipeline/data_gen.py` 模块提供批量动力分析能力。程序通过对选定单元弹性模量 $E$ 进行折减（例如乘以 $0.5 \sim 0.9$）模拟损伤，然后对每个样本执行时程积分，输出全节点全时刻位移、单元应力历史和损伤标签。对桁架模型，von Mises 应力采用一维近似 $\sigma_{vm}=|\sigma_{axial}|$。
 
 ## 3. 使用方法与输入格式
-程序使用三文件输入模式：
 
-1. `structure_input.txt`：结构、拓扑和边界条件
-2. `static_loads.txt`：静载分量（`Fx/Fy`）
-3. `dynamic_loads.txt`：动载范围与批量配置
+程序支持两套输入体系：
 
-详细格式与字段说明见 `INPUT_FORMAT.md`。默认入口：
+### 体系一：传统格式（兼容旧版）
+- `structure_input.txt`：结构、拓扑和边界条件
+- `static_loads.txt`：静载分量
+- `dynamic_loads.txt`：动载范围配置
 
-- 静力：`PyFEM_Dynamics/main.py`
-- 批量：`PyFEM_Dynamics/pipeline/data_gen.py`
+详细格式见 `INPUT_FORMAT.md`。
+
+### 体系二：YAML统一配置（推荐用于深度学习）
+
+- `structure.yaml`：固定结构定义（不参与训练）
+- `dataset_config.yaml`：数据集生成配置
+
+**入口文件：**
+- 静力验证：`PyFEM_Dynamics/main.py`
+- 数据集生成：`PyFEM_Dynamics/pipeline/data_gen.py`
+
+**输出格式：**
+- 统一NPZ文件：`dataset/train.npz`
+  - `load`: (N, T, DOF) - 载荷时程
+  - `E`: (N, elem) - 弹性模量
+  - `disp`: (N, T, DOF) - 位移响应
+  - `stress`: (N, T, elem) - 应力响应
+  - `damage`: (N, elem) - 损伤标签
 
 ## 4. 算例与结果展示
 

@@ -1,0 +1,8 @@
+{
+  "generated_at": "2026-02-22T23:13:20",
+  "threshold": 0.95,
+  "metrics_table": "metrics_table.csv",
+  "n_models": 2,
+  "n_runs_aggregated": 2,
+  "metadata": {}
+}
