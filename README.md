@@ -91,19 +91,37 @@ python deep_learning/train.py --model gt --epochs 100 --batch_size 128
 python deep_learning/train.py --model pinn --epochs 100
 ```
 
-## 6. 结果展示
+## 6. 结果展示 (Results Gallery)
 
-程序内置了高精度的多物理量可视化接口：
+程序内置了高精度的多物理量可视化接口，支持从动力学仿真到深度学习识别的全链路展示。
 
-**1. 动力可视化：von Mises 应力云图 (修正缩放因子)**
-动态展示结构在时程载荷下的应力分布。通过优化的坐标变换逻辑，准确叠加变形后的几何形态：
+### 6.1 动力学仿真可视化
+**1. von Mises 应力云图 (修正缩放因子)**
+动态展示结构在脉冲载荷下的位移响应。通过优化的坐标变换逻辑，准确呈现毫米级变位在直观视觉上的比例平衡：
 ![vm_cloud_frame](docs/images/supervisor/vm_cloud_frame_100.png)
 
-**2. 深度学习迁移：GT 训练监控**
-Graph Transformer 在复杂拓扑识别任务中具有更佳的收敛速度和物理一致性。
-![gt_metrics](docs/images/supervisor/model_comparison.png) 
-*(注：GT 指标优于传统的序列建模方法)*
+### 6.2 深度学习训练可视化分析
+我们利用 `visualization.py` 对 **Graph Transformer (GT)** 与 **PINN** 模型在 10,000 样本规模下的表现进行了可视化对比：
+
+**1. 训练历史与收敛性对比**
+GT 模型在首个 5 轮即展现出极强的特征捕获能力，其验证损失（Val Loss）与平均绝对误差（MAE）迅速下降并趋于平稳，无明显过拟合。
+````carousel
+![GT History](docs/images/dl_results/gt_history.png)
+<!-- slide -->
+![PINN History](docs/images/dl_results/pinn_history.png)
+````
+
+**2. 模型性能横向评价**
+在同样的测试集下，GT 模型在 MAE、RMSE 及 F1 分数上均优于 PINN 及传统的卷积序列模型。
+![Model Comparison](docs/images/dl_results/model_comparison.png)
+
+**3. 损伤预测细节展示 (Prediction Scatter)**
+下图展示了随机抽取的样本中各单元的真值与预测值对比。绿色表示识别正确，红色表示偏差。GT 模型对主受力路径上的杆件损伤识别极其精准。
+![Prediction Comparison](docs/images/dl_results/prediction_comparison.png)
+
+**4. 置信度校准曲线 (Calibration)**
+校准曲线反映了模型输出预测值与实际发现损伤频率的一致性。GT 模型的曲线更接近 $45^\circ$ 对角线，意味着其损伤预测具有极高的物理可信度。
+![Calibration Curve](docs/images/dl_results/calibration_curve.png)
 
 ---
 **致谢**: 本项目为工程力学本科生力学数值实验与 AI+Science 交叉研究成果。
-

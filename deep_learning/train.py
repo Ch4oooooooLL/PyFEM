@@ -291,6 +291,7 @@ def main():
     
     sample_x, sample_y = dataset[0]
     # Input x shape for GT: (timesteps, nodes*2) -> Needs reshape to (nodes, timesteps, 2) inside model
+    input_dim = sample_x.shape[1]
     output_dim = sample_y.shape[0]
     
     print(f"Sequence length: {sample_x.shape[0]}, Output dim: {output_dim}")
@@ -337,8 +338,8 @@ def main():
             config,
             device,
             'gt',
-            graph_info,
-            ckpt_dir,
+            graph_info=graph_info,
+            save_dir=ckpt_dir,
             threshold=args.threshold
         )
 
@@ -390,7 +391,8 @@ def main():
             config,
             device,
             'pinn',
-            ckpt_dir,
+            graph_info=None,
+            save_dir=ckpt_dir,
             threshold=args.threshold
         )
 
