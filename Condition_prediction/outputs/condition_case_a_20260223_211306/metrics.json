@@ -1,0 +1,10 @@
+{
+  "time_mae_vs_fem": 0.025123962959734274,
+  "time_rmse_vs_fem": 0.07452608566659126,
+  "final_mae_vs_fem": 0.039957951806850224,
+  "final_rmse_vs_fem": 0.04070699709300331,
+  "time_mae_vs_true": 0.054347554093192245,
+  "time_rmse_vs_true": 0.09171710383170548,
+  "final_mae_vs_true": 0.06601908640428023,
+  "final_rmse_vs_true": 0.08752308441427172
+}

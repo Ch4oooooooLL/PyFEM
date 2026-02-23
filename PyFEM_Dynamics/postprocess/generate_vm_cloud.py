@@ -4,6 +4,7 @@ import sys
 
 import numpy as np
 import yaml
+from typing import List, Tuple
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.dirname(CURRENT_DIR)
@@ -13,9 +14,45 @@ if PROJECT_DIR not in sys.path:
 
 from pipeline.data_gen import generate_load_matrix, run_fem_solver
 from postprocess.plotter import Plotter
-import postprocess.plotter as plotter_module
-print(f"DEBUG: Plotter module file: {plotter_module.__file__}")
 from core.io_parser import YAMLParser
+from core.node import Node
+
+
+def _compute_global_plot_limits(
+    nodes: List[Node],
+    U: np.ndarray,
+    scale_factor: float,
+    padding_ratio: float = 0.05,
+) -> Tuple[Tuple[float, float], Tuple[float, float]]:
+    """
+    基于全时程位移，计算统一的坐标显示范围，避免逐帧自动缩放导致视觉失真。
+    """
+    x_min = float("inf")
+    x_max = float("-inf")
+    y_min = float("inf")
+    y_max = float("-inf")
+
+    for node in nodes:
+        ux_hist = U[:, node.dofs[0]]
+        uy_hist = U[:, node.dofs[1]]
+
+        x_hist = node.x + ux_hist * scale_factor
+        y_hist = node.y + uy_hist * scale_factor
+
+        x_min = min(x_min, float(np.min(x_hist)), float(node.x))
+        x_max = max(x_max, float(np.max(x_hist)), float(node.x))
+        y_min = min(y_min, float(np.min(y_hist)), float(node.y))
+        y_max = max(y_max, float(np.max(y_hist)), float(node.y))
+
+    if not np.isfinite([x_min, x_max, y_min, y_max]).all():
+        raise ValueError("Invalid global plotting limits computed from displacement history.")
+
+    x_span = max(x_max - x_min, 1e-12)
+    y_span = max(y_max - y_min, 1e-12)
+    x_pad = x_span * padding_ratio
+    y_pad = y_span * padding_ratio
+
+    return (x_min - x_pad, x_max + x_pad), (y_min - y_pad, y_max + y_pad)
 
 
 def regenerate_vm_cloud(
@@ -26,6 +63,9 @@ def regenerate_vm_cloud(
     representative_frame: int = 100,
     scale_factor: float = 1000.0,
 ) -> str:
+    if frame_step <= 0:
+        raise ValueError("frame_step must be a positive integer.")
+
     with open(config_path, "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
 
@@ -43,7 +83,7 @@ def regenerate_vm_cloud(
 
     nodes, elements, bcs = YAMLParser.build_structure_objects(structure_file)
     num_nodes = len(nodes)
-    dofs_per_node = 2
+    dofs_per_node = len(nodes[0].dofs) if nodes else 2
 
     load_specs = config["load_generation"]["loads"]
     damping_cfg = config.get("damping", {})
@@ -58,12 +98,10 @@ def regenerate_vm_cloud(
 
     vmin = float(np.min(stress_vm))
     vmax = float(np.max(stress_vm))
+    xlim, ylim = _compute_global_plot_limits(nodes, U, scale_factor)
 
     Plotter.setup_paper_style()
-    
-    # 记录已生成的帧，避免重复绘制
-    generated_frames = set()
-    
+
     # 1. 按照 step 生成序列帧
     for frame_idx in range(0, stress_vm.shape[0], frame_step):
         frame_path = os.path.join(sample_dir, f"frame_{frame_idx:06d}.png")
@@ -77,8 +115,9 @@ def regenerate_vm_cloud(
             scale_factor=scale_factor,
             vmin=vmin,
             vmax=vmax,
+            xlim=xlim,
+            ylim=ylim,
         )
-        generated_frames.add(frame_idx)
 
     # 2. 确保代表性帧也被生成 (always draw the representative frame)
     # Adjust representative_frame if it's out of bounds
@@ -97,6 +136,8 @@ def regenerate_vm_cloud(
         scale_factor=scale_factor,
         vmin=vmin,
         vmax=vmax,
+        xlim=xlim,
+        ylim=ylim,
     )
 
     return rep_path

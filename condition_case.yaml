@@ -1,0 +1,59 @@
+structure_file: structure.yaml
+
+time:
+  dt: 0.01
+  total_time: 2.0
+
+damping:
+  alpha: 0.1
+  beta: 0.01
+
+load_case:
+  loads:
+    - node_id: 3
+      dof: fx
+      pattern: harmonic
+      F0: 10000.0
+      freq: 1.20
+      phase: 0.0
+      offset: 0.0
+      duration: 2.0
+
+    - node_id: 3
+      dof: fy
+      pattern: harmonic
+      F0: 15000.0
+      freq: 0.95
+      phase: 0.0
+      offset: -15000.0
+      duration: 2.0
+
+    - node_id: 4
+      dof: fy
+      pattern: harmonic
+      F0: 9000.0
+      freq: 1.40
+      phase: 0.5
+      offset: -10000.0
+      duration: 2.0
+
+damage_case:
+  damaged_elements:
+    - element_id: 7
+      factor: 0.75
+    - element_id: 8
+      factor: 0.80
+
+deep_learning:
+  inference:
+    model_type: gt
+    feature_mode: response
+    checkpoint: Deep_learning/checkpoints/gt_best.pth
+    dataset_npz: dataset/train.npz
+    device: auto
+    threshold: 0.95
+
+output:
+  root_dir: Condition_prediction/outputs
+  case_name: condition_case_a
+  focus_elements: [7, 8, 6, 9]

@@ -577,11 +577,13 @@ class TrainingVisualizer:
 
         # Per-model training curves
         for model_name, data in results.items():
-            self.plot_training_history(
-                data["history"],
-                model_name=model_name,
-                save_stem=os.path.join(report_dir, f"{model_name}_history"),
-            )
+            history = data.get("history", {})
+            if history.get("train_loss") and history.get("val_loss"):
+                self.plot_training_history(
+                    history,
+                    model_name=model_name,
+                    save_stem=os.path.join(report_dir, f"{model_name}_history"),
+                )
 
         # Cross-model summary
         self.plot_model_comparison(results, save_stem=os.path.join(report_dir, "model_comparison"))

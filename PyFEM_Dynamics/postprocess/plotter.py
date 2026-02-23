@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import numpy as np
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from core.node import Node
 from core.element import TrussElement2D
 
@@ -221,6 +221,8 @@ class Plotter:
         scale_factor: float = 1.0,
         vmin: Optional[float] = None,
         vmax: Optional[float] = None,
+        xlim: Optional[Tuple[float, float]] = None,
+        ylim: Optional[Tuple[float, float]] = None,
     ):
         """
         绘制桁架单元 von Mises 应力(近似)云图单帧，支持位移叠加。
@@ -274,6 +276,10 @@ class Plotter:
         ax.set_ylabel("Y Coordinate (m)")
         ax.set_title(title)
         ax.grid(True, alpha=0.3, linestyle="--")
+        if xlim is not None:
+            ax.set_xlim(*xlim)
+        if ylim is not None:
+            ax.set_ylim(*ylim)
 
         sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
         sm.set_array([])

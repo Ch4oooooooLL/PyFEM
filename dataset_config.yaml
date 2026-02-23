@@ -6,7 +6,7 @@ time:
   total_time: 2.0
 
 generation:
-  num_samples: 10000
+  num_samples: 20000
   random_seed: 42
 
 damage:
@@ -16,27 +16,54 @@ damage:
   reduction_range: [0.5, 0.9]
 
 load_generation:
-  mode: "random"
-  loads:
-    - node_id: 3
-      dof: "fx"
-      pattern: "pulse"
-      F0_range: [5000, 15000]
-      t_start_range: [0.0, 0.1]
-      t_end_range: [0.2, 0.4]
-    - node_id: 3
-      dof: "fy"
-      pattern: "pulse"
-      F0_range: [-30000, -10000]
-      t_start_range: [0.0, 0.1]
-      t_end_range: [0.2, 0.4]
-    - node_id: 4
-      dof: "fy"
-      pattern: "half_sine"
-      F0_range: [-20000, -5000]
-      t_start_range: [0.1, 0.3]
-      t_end_range: [0.4, 0.7]
+  mode: random_multi_point
+  random_multi_point:
+    num_loads_per_sample_range: [2, 5]
+    candidate_nodes:
+      mode: all_non_support_nodes
+      include_nodes: []
+      exclude_nodes: []
+    dof_candidates: [fx, fy]
+    dof_weights: [0.45, 0.55]
+    pattern_candidates: [harmonic, pulse, half_sine, gaussian, ramp]
+    pattern_weights: [0.55, 0.10, 0.10, 0.10, 0.15]
+    avoid_duplicate_node_dof: true
+    parameter_ranges:
+      F0: [5000, 20000]
+      freq: [0.5, 2.4]
+      phase: [0.0, 6.283185307]
+      offset: [-22000, 5000]
+      t_start: [0.0, 1.6]
+      t_end: [0.15, 2.0]
+      t_ramp: [0.05, 0.6]
+      t0: [0.1, 1.9]
+      sigma: [0.03, 0.25]
 
 damping:
   alpha: 0.1
   beta: 0.01
+
+deep_learning:
+  train:
+    model: gt
+    dataset_mode: response
+    epochs: 100
+    batch_size: 32
+    lr: 0.001
+    hidden_dim: 64
+    lambda_smooth: 0.1
+    threshold: 0.95
+    seed: 42
+    deterministic: true
+    deterministic_warn_only: false
+    num_threads: 1
+    device: auto
+    amp: false
+    num_workers: 0
+    pin_memory: true
+  inference:
+    model_type: gt
+    feature_mode: response
+    checkpoint: Deep_learning/checkpoints/gt_best.pth
+    dataset_npz: dataset/train.npz
+    device: auto

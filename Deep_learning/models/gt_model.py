@@ -78,6 +78,7 @@ class GTDamagePredictor(nn.Module):
         super(GTDamagePredictor, self).__init__()
         self.num_nodes = num_nodes
         self.num_elements = num_elements
+        self.node_in_dim = node_in_dim
         
         # 1. 节点时程特征提取器 (Temporal Encoder)
         self.node_encoder = nn.Sequential(
@@ -110,15 +111,15 @@ class GTDamagePredictor(nn.Module):
         """
         batch_size = x.size(0)
         
-        # 1. 整理输入至 (batch, num_nodes, timesteps, 2)
-        # 先将 14 拆分为 (7, 2)
-        x_nodes = x.view(batch_size, -1, self.num_nodes, 2).transpose(1, 2) 
-        # (batch, num_nodes, timesteps, 2)
+        # 1. 整理输入至 (batch, num_nodes, timesteps, node_in_dim)
+        # 最后一个特征维自动按节点拆分
+        x_nodes = x.view(batch_size, -1, self.num_nodes, self.node_in_dim).transpose(1, 2) 
+        # (batch, num_nodes, timesteps, node_in_dim)
         
         # 2. 时间特征提取 (Temporal Encoder)
         # 将 batch 和 node 维度合并处理
-        x_flat = x_nodes.reshape(batch_size * self.num_nodes, -1, 2).transpose(1, 2)
-        # (batch * num_nodes, 2, timesteps)
+        x_flat = x_nodes.reshape(batch_size * self.num_nodes, -1, self.node_in_dim).transpose(1, 2)
+        # (batch * num_nodes, node_in_dim, timesteps)
         
         h_node = self.node_encoder(x_flat).squeeze(-1)
         # (batch * num_nodes, hidden_dim)

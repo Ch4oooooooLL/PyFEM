@@ -1,7 +1,6 @@
 import json
 import os
 import sys
-from dataclasses import dataclass
 from typing import Any, Dict, List, Tuple
 
 import numpy as np
@@ -15,23 +14,149 @@ if PROJECT_DIR not in sys.path:
 
 from core.element import TrussElement2D
 from core.io_parser import YAMLParser
-from core.material import Material
 from core.node import Node
-from core.section import Section
 from solver.assembler import Assembler
 from solver.boundary import BoundaryCondition
 from solver.integrator import NewmarkBetaSolver
 from solver.stress_recovery import recover_truss_stress_time_history
 
 
-@dataclass
-class LoadSpec:
-    node_id: int
-    dof: str
-    pattern: str
-    params: Dict[str, Any]
+DOF_TO_LOCAL = {"fx": 0, "ux": 0, "fy": 1, "uy": 1, "rz": 2}
 
 
+def _sample_scalar(spec: Dict[str, Any], key: str, rng: np.random.Generator, default: float) -> float:
+    """
+    从配置项中读取标量参数，支持:
+    1) key: 直接给定标量
+    2) key: [low, high] 范围
+    3) key_range: [low, high] 范围
+    """
+    if key in spec:
+        value = spec[key]
+    else:
+        range_key = f"{key}_range"
+        if range_key in spec:
+            value = spec[range_key]
+        else:
+            return float(default)
+
+    if isinstance(value, (list, tuple, np.ndarray)):
+        if len(value) == 0:
+            return float(default)
+        if len(value) == 1:
+            return float(value[0])
+        low = float(value[0])
+        high = float(value[1])
+        return float(rng.uniform(low, high))
+
+    return float(value)
+
+
+def _normalize_weights(n: int, weights: List[float] | None) -> np.ndarray | None:
+    if not weights:
+        return None
+    arr = np.asarray(weights, dtype=float)
+    if arr.size != n:
+        return None
+    total = float(np.sum(arr))
+    if total <= 0.0:
+        return None
+    return arr / total
+
+
+def _resolve_candidate_nodes(
+    num_nodes: int,
+    bcs: List[Tuple[int, int, float]],
+    node_cfg: Dict[str, Any],
+) -> List[int]:
+    mode = str(node_cfg.get("mode", "all_non_support_nodes")).lower()
+    include_nodes = [int(n) for n in node_cfg.get("include_nodes", [])]
+    exclude_nodes = {int(n) for n in node_cfg.get("exclude_nodes", [])}
+    support_nodes = {int(nid) for nid, _, _ in bcs}
+
+    all_nodes = list(range(num_nodes))
+    if mode == "all_nodes":
+        candidates = all_nodes
+    elif mode == "all_non_support_nodes":
+        candidates = [n for n in all_nodes if n not in support_nodes]
+    elif mode == "explicit":
+        candidates = include_nodes
+    else:
+        raise ValueError(f"Unsupported candidate_nodes.mode: {mode}")
+
+    if include_nodes and mode != "explicit":
+        include_set = set(include_nodes)
+        candidates = [n for n in candidates if n in include_set]
+
+    candidates = [n for n in candidates if n not in exclude_nodes]
+    candidates = sorted(set(candidates))
+    if not candidates:
+        raise ValueError("No candidate load nodes available after filtering.")
+    return candidates
+
+
+def _build_random_load_specs(
+    random_cfg: Dict[str, Any],
+    num_nodes: int,
+    dofs_per_node: int,
+    bcs: List[Tuple[int, int, float]],
+    rng: np.random.Generator,
+) -> List[Dict[str, Any]]:
+    count_range = random_cfg.get("num_loads_per_sample_range", [1, 3])
+    if len(count_range) < 2:
+        raise ValueError("num_loads_per_sample_range must contain [min, max].")
+    min_loads = int(count_range[0])
+    max_loads = int(count_range[1])
+    if min_loads <= 0 or max_loads < min_loads:
+        raise ValueError("Invalid num_loads_per_sample_range.")
+
+    node_cfg = random_cfg.get("candidate_nodes", {})
+    candidate_nodes = _resolve_candidate_nodes(num_nodes, bcs, node_cfg)
+
+    dof_candidates = [str(x).lower() for x in random_cfg.get("dof_candidates", ["fx", "fy"])]
+    dof_candidates = [d for d in dof_candidates if d in DOF_TO_LOCAL and DOF_TO_LOCAL[d] < dofs_per_node]
+    if not dof_candidates:
+        raise ValueError("No valid dof_candidates for current dofs_per_node.")
+    dof_prob = _normalize_weights(len(dof_candidates), random_cfg.get("dof_weights"))
+
+    pattern_candidates = [str(x).lower() for x in random_cfg.get("pattern_candidates", ["harmonic"])]
+    if not pattern_candidates:
+        raise ValueError("pattern_candidates is empty.")
+    pattern_prob = _normalize_weights(len(pattern_candidates), random_cfg.get("pattern_weights"))
+    param_ranges = random_cfg.get("parameter_ranges", {})
+    avoid_duplicate = bool(random_cfg.get("avoid_duplicate_node_dof", True))
+
+    num_loads = int(rng.integers(min_loads, max_loads + 1))
+    specs: List[Dict[str, Any]] = []
+
+    if avoid_duplicate:
+        all_pairs = [(n, d) for n in candidate_nodes for d in dof_candidates]
+        if not all_pairs:
+            raise ValueError("No (node, dof) pairs for random loading.")
+        num_loads = min(num_loads, len(all_pairs))
+        chosen_ids = rng.choice(len(all_pairs), size=num_loads, replace=False)
+        pairs = [all_pairs[int(i)] for i in chosen_ids]
+    else:
+        node_prob = None
+        if "node_weights" in random_cfg:
+            node_prob = _normalize_weights(len(candidate_nodes), random_cfg.get("node_weights"))
+        pairs = []
+        for _ in range(num_loads):
+            node_id = int(rng.choice(candidate_nodes, p=node_prob))
+            dof = str(rng.choice(dof_candidates, p=dof_prob))
+            pairs.append((node_id, dof))
+
+    for node_id, dof in pairs:
+        pattern = str(rng.choice(pattern_candidates, p=pattern_prob))
+        spec: Dict[str, Any] = {"node_id": int(node_id), "dof": dof, "pattern": pattern}
+        for key, value in param_ranges.items():
+            if isinstance(value, (list, tuple)):
+                spec[f"{key}_range"] = list(value)
+            else:
+                spec[key] = value
+        specs.append(spec)
+
+    return specs
 
 
 
@@ -63,14 +188,11 @@ def generate_load_matrix(
         elif dof == 'rz':
             dof_idx += 2
         
-        F0_range = spec.get('F0_range', [0, 0])
-        F0 = float(rng.uniform(F0_range[0], F0_range[1]))
+        F0 = _sample_scalar(spec, 'F0', rng, default=0.0)
         
         if pattern == 'pulse':
-            t_start_range = spec.get('t_start_range', [0, 0])
-            t_end_range = spec.get('t_end_range', [0, 0])
-            t_start = float(rng.uniform(t_start_range[0], t_start_range[1]))
-            t_end = float(rng.uniform(t_end_range[0], t_end_range[1]))
+            t_start = _sample_scalar(spec, 't_start', rng, default=0.0)
+            t_end = _sample_scalar(spec, 't_end', rng, default=t_start + dt)
             if t_end <= t_start:
                 t_end = t_start + 0.1
             
@@ -78,17 +200,19 @@ def generate_load_matrix(
             load_matrix[mask, dof_idx] += F0
             
         elif pattern == 'harmonic':
-            freq = spec.get('freq', 1.0)
-            duration = spec.get('duration', t[-1])
-            signal = F0 * np.sin(2 * np.pi * freq * t)
-            mask = t < duration
+            freq = _sample_scalar(spec, 'freq', rng, default=1.0)
+            phase = _sample_scalar(spec, 'phase', rng, default=0.0)
+            offset = _sample_scalar(spec, 'offset', rng, default=0.0)
+            duration = float(spec.get('duration', t[-1]))
+            duration = min(duration, float(t[-1]))
+
+            signal = F0 * np.sin(2 * np.pi * freq * t + phase) + offset
+            mask = t <= duration + 1e-12
             load_matrix[mask, dof_idx] += signal[mask]
             
         elif pattern == 'half_sine':
-            t_start_range = spec.get('t_start_range', [0, 0])
-            t_end_range = spec.get('t_end_range', [0, 0])
-            t_start = float(rng.uniform(t_start_range[0], t_start_range[1]))
-            t_end = float(rng.uniform(t_end_range[0], t_end_range[1]))
+            t_start = _sample_scalar(spec, 't_start', rng, default=0.0)
+            t_end = _sample_scalar(spec, 't_end', rng, default=t_start + dt)
             if t_end <= t_start:
                 t_end = t_start + 0.1
             
@@ -98,18 +222,16 @@ def generate_load_matrix(
             load_matrix[mask, dof_idx] += F0 * np.sin(np.pi * t_rel / duration)
             
         elif pattern == 'ramp':
-            t_start = spec.get('t_start', 0.0)
-            t_ramp = spec.get('t_ramp', 0.1)
+            t_start = _sample_scalar(spec, 't_start', rng, default=0.0)
+            t_ramp = _sample_scalar(spec, 't_ramp', rng, default=0.1)
             mask = (t >= t_start) & (t < t_start + t_ramp)
             load_matrix[mask, dof_idx] += F0 * (t[mask] - t_start) / t_ramp
             mask2 = t >= t_start + t_ramp
             load_matrix[mask2, dof_idx] += F0
             
         elif pattern == 'gaussian':
-            t0_range = spec.get('t0_range', [0.1, 0.1])
-            sigma_range = spec.get('sigma_range', [0.05, 0.05])
-            t0 = float(rng.uniform(t0_range[0], t0_range[1]))
-            sigma = float(rng.uniform(sigma_range[0], sigma_range[1]))
+            t0 = _sample_scalar(spec, 't0', rng, default=0.1)
+            sigma = _sample_scalar(spec, 'sigma', rng, default=0.05)
             load_matrix[:, dof_idx] += F0 * np.exp(-0.5 * ((t - t0) / sigma) ** 2)
     
     return load_matrix
@@ -229,8 +351,10 @@ def generate_dataset(config_path: str = None) -> None:
     num_nodes = len(nodes)
     num_elements = len(elements)
     num_dofs = sum(len(node.dofs) for node in nodes)
+    dofs_per_node = len(nodes[0].dofs) if nodes else 2
     
-    load_specs = config['load_generation']['loads']
+    load_generation_cfg = config['load_generation']
+    load_mode = str(load_generation_cfg.get('mode', 'fixed')).lower()
     damage_config = config.get('damage', {})
     damping_config = config.get('damping', {})
     alpha = damping_config.get('alpha', 0.1)
@@ -256,8 +380,24 @@ def generate_dataset(config_path: str = None) -> None:
         
         damage_vec, E_damaged = apply_damage(elements_i, damage_config, rng)
         
+        if load_mode in {'random', 'random_multi_point'}:
+            random_cfg = load_generation_cfg.get('random_multi_point', {})
+            sample_load_specs = _build_random_load_specs(
+                random_cfg=random_cfg,
+                num_nodes=num_nodes,
+                dofs_per_node=dofs_per_node,
+                bcs=bcs_i,
+                rng=rng,
+            )
+        elif load_mode in {'fixed', 'manual'}:
+            sample_load_specs = load_generation_cfg.get('loads', [])
+            if not sample_load_specs:
+                raise ValueError("load_generation.loads is empty for fixed/manual mode.")
+        else:
+            raise ValueError(f"Unsupported load_generation.mode: {load_mode}")
+
         load_matrix = generate_load_matrix(
-            load_specs, num_nodes, 2, dt, num_steps, rng
+            sample_load_specs, num_nodes, dofs_per_node, dt, num_steps, rng
         )
         
         disp, stress = run_fem_solver(
@@ -294,6 +434,7 @@ def generate_dataset(config_path: str = None) -> None:
         'random_seed': random_seed,
         'damping_alpha': alpha,
         'damping_beta': beta,
+        'load_mode': load_mode,
         'data_keys': ['load', 'E', 'disp', 'stress', 'damage'],
         'shapes': {
             'load': list(all_loads.shape),
