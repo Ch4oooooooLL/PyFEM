@@ -13,6 +13,8 @@ if PROJECT_DIR not in sys.path:
 
 from pipeline.data_gen import generate_load_matrix, run_fem_solver
 from postprocess.plotter import Plotter
+import postprocess.plotter as plotter_module
+print(f"DEBUG: Plotter module file: {plotter_module.__file__}")
 from core.io_parser import YAMLParser
 
 
@@ -58,6 +60,11 @@ def regenerate_vm_cloud(
     vmax = float(np.max(stress_vm))
 
     Plotter.setup_paper_style()
+    
+    # 记录已生成的帧，避免重复绘制
+    generated_frames = set()
+    
+    # 1. 按照 step 生成序列帧
     for frame_idx in range(0, stress_vm.shape[0], frame_step):
         frame_path = os.path.join(sample_dir, f"frame_{frame_idx:06d}.png")
         Plotter.plot_truss_vm_frame(
@@ -71,8 +78,28 @@ def regenerate_vm_cloud(
             vmin=vmin,
             vmax=vmax,
         )
+        generated_frames.add(frame_idx)
 
-    return os.path.join(sample_dir, f"frame_{representative_frame:06d}.png")
+    # 2. 确保代表性帧也被生成 (always draw the representative frame)
+    # Adjust representative_frame if it's out of bounds
+    if representative_frame >= stress_vm.shape[0]:
+        representative_frame = stress_vm.shape[0] - 1
+    
+    rep_path = os.path.join(sample_dir, f"frame_{representative_frame:06d}.png")
+    
+    Plotter.plot_truss_vm_frame(
+        nodes=nodes,
+        elements=elements,
+        vm_values=stress_vm[representative_frame],
+        title=f"von Mises Stress (sample {sample_id}, representative frame {representative_frame})",
+        save_path=rep_path,
+        U=U[representative_frame],
+        scale_factor=scale_factor,
+        vmin=vmin,
+        vmax=vmax,
+    )
+
+    return rep_path
 
 
 def main() -> None:
