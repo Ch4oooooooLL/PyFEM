@@ -12,7 +12,7 @@
 本部分的开发严格遵循有限元分析（FEA）的标准数值处理流程。通过将力学公式转化为程序逻辑，实现对桁架及梁结构的静/动力响应分析。
 
 ### 2.1 参数化建模与前处理
-模型通过 YAML 配置文件定义几何拓扑、材料属性及边界约束。系统内部通过 `Node` 和 `Element` 对象建立力学关联。
+模型通过 YAML 配置文件定义几何拓扑、材料属性 ($E$, $\rho$, $\nu$) 及边界约束。系统内部通过 `Node` 和 `Element` 对象建立力学关联。
 
 *   **节点构造片段** (`./PyFEM_Dynamics/core/node.py`):
 ```python
@@ -55,7 +55,7 @@ def get_local_stiffness(self):
 利用**直接刚度法 (Direct Stiffness Method)** 将各单元贡献累加至全局矩阵 $\mathbf{K}$ 与 $\mathbf{M}$ 中。系统在 `solver/assembler.py` 中提供了集中质量矩阵（Lumped Mass Matrix）的选项：
 
 $$
-\mathbf{m}_{lumped}^e = \frac{\rho A L}{2}\begin{bmatrix} 1 & 0 \\\\ 0 & 1 \end{bmatrix}
+\mathbf{m}_{\text{lumped}}^e = \frac{\rho A L}{2}\begin{bmatrix} 1 & 0 \\\\ 0 & 1 \end{bmatrix}
 $$
 
 *   **组装代码** (`./PyFEM_Dynamics/solver/assembler.py`):
@@ -98,7 +98,7 @@ $$
 \mathbf{M}\ddot{\mathbf{u}}(t) + \mathbf{C}\dot{\mathbf{u}}(t) + \mathbf{K}\mathbf{u}(t) = \mathbf{F}(t)
 $$
 
-系统采用经典的 **Newmark-$\beta$ 隐式积分法**。阻尼矩阵 $\mathbf{C}$ 基于 Rayleigh 比例阻尼模型构建：$\mathbf{C} = \alpha \mathbf{M} + \beta \mathbf{K}$。算法取 $\gamma=0.5, \beta=0.25$（平均加速度法）以确保线性系统的无条件稳定性。
+系统采用经典的 **Newmark-$\beta$ 隐式积分法**。阻尼矩阵 $\mathbf{C}$ 基于 Rayleigh 比例阻尼模型构建：$\mathbf{C} = \alpha \mathbf{M} + \beta \mathbf{K}$。算法取 $\gamma = 0.5$, $\beta = 0.25$ （平均加速度法）以确保线性系统的无条件稳定性。
 
 *   **核心求解逻辑** (`./PyFEM_Dynamics/solver/integrator.py`):
 ```python
