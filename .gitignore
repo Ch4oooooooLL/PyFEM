@@ -8,3 +8,6 @@ __pycache__/
 # Datasets and postprocess outputs
 dataset/
 postprocess_results/
+*_bak/
+deep_learning/checkpoints/
+deep_learning/figures/report_*/
