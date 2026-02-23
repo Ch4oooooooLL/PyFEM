@@ -73,7 +73,10 @@ def assemble_K(self):
 为处理本质边界条件并消除矩阵奇异性，程序实现了 **划零划一法 (Zero-One Substitution Method)**：
 
 $$
-\mathbf{K}_{ij} = \delta_{ij}, \quad \mathbf{F}_i = \bar{u}_i \quad (\text{if node } i \text{ is constrained})
+\begin{cases}
+\mathbf{K}_{ij} = \delta_{ij} \\\\
+\mathbf{F}_i = \bar{u}_i
+\end{cases} \quad (\text{对于受约束的自由度 } i)
 $$
 该方法相比罚函数法能更好地保证节点位移的精确解，避免了数值溢出风险。
 
