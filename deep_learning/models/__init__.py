@@ -1,10 +1,9 @@
 
-from .lstm_model import LSTMDamagePredictor, CNNDamagePredictor
+from .gt_model import GTDamagePredictor
 from .pinn_model import PINNDamagePredictor, PINNLoss
 
 __all__ = [
-    'LSTMDamagePredictor',
-    'CNNDamagePredictor',
+    'GTDamagePredictor',
     'PINNDamagePredictor',
     'PINNLoss'
 ]

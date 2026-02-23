@@ -6,7 +6,7 @@ time:
   total_time: 2.0
 
 generation:
-  num_samples: 2000
+  num_samples: 10000
   random_seed: 42
 
 damage:
