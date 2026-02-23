@@ -9,7 +9,7 @@ Important: do not commit this file. Keep it untracked.
 Top-level (high signal):
 
 - `PyFEM_Dynamics/`: FEM solver implementation
-- `deep_learning/`: LSTM/PINN training code consuming `dataset/train.npz`
+- `Deep_learning/`: LSTM/PINN training code consuming `dataset/train.npz`
 - `README.md`: theory overview + how to run + data format
 - `INPUT_FORMAT.md`: input formats (legacy txt/csv + YAML mode)
 - `spec.md`: requirements/specification (module structure, solver choices)
@@ -61,21 +61,21 @@ python PyFEM_Dynamics/pipeline/data_gen.py
 
 ### Deep learning training (optional)
 
-- `deep_learning/train.py`
+- `Deep_learning/train.py`
   - Trains LSTM and/or PINN models on `dataset/train.npz`
 
 Run examples:
 
 ```bash
-python deep_learning/train.py --model lstm --epochs 100
-python deep_learning/train.py --model pinn --epochs 100
-python deep_learning/train.py --model both --epochs 100
+python Deep_learning/train.py --model lstm --epochs 100
+python Deep_learning/train.py --model pinn --epochs 100
+python Deep_learning/train.py --model both --epochs 100
 ```
 
 Dependency install for ML sidecar:
 
 ```bash
-pip install -r deep_learning/requirements.txt
+pip install -r Deep_learning/requirements.txt
 ```
 
 ## 3) Architecture Map (Where Things Live)
@@ -122,13 +122,13 @@ Numerical flow (dynamic):
 
 - `PyFEM_Dynamics/postprocess/plotter.py`: structure deformation + time histories + sample plots
 
-### Deep learning sidecar (`deep_learning/`)
+### Deep learning sidecar (`Deep_learning/`)
 
-- `deep_learning/data/dataset.py`: `FEMDataset` loads `train.npz` (supports `mode=response|load|both`)
-- `deep_learning/models/lstm_model.py`: BiLSTM + attention predictor
-- `deep_learning/models/pinn_model.py`: PINN-like predictor + composite loss
-- `deep_learning/utils/metrics.py`: metrics + early stopping
-- `deep_learning/utils/visualization.py`: training plots/reports
+- `Deep_learning/data/dataset.py`: `FEMDataset` loads `train.npz` (supports `mode=response|load|both`)
+- `Deep_learning/models/lstm_model.py`: BiLSTM + attention predictor
+- `Deep_learning/models/pinn_model.py`: PINN-like predictor + composite loss
+- `Deep_learning/utils/metrics.py`: metrics + early stopping
+- `Deep_learning/utils/visualization.py`: training plots/reports
 
 ## 4) Data Formats (What Files Mean)
 
@@ -176,7 +176,7 @@ See: `INPUT_FORMAT.md` for the full grammar.
 ### When modifying data schema
 
 - If you change keys/shapes written by `data_gen.py`, update:
-  - `deep_learning/data/dataset.py`
+  - `Deep_learning/data/dataset.py`
   - Any training/visualization code expecting existing keys.
 
 ## 6) Verification (Because There Is No Test Suite)
@@ -198,7 +198,7 @@ python PyFEM_Dynamics/pipeline/data_gen.py
 3) ML training smoke test (after installing deps):
 
 ```bash
-python deep_learning/train.py --model lstm --epochs 1
+python Deep_learning/train.py --model lstm --epochs 1
 ```
 
 If a change affects only formatting/docs, skip runtime checks.
@@ -206,7 +206,7 @@ If a change affects only formatting/docs, skip runtime checks.
 ## 7) Gotchas / Traps
 
 - Generated artifacts are large/noisy:
-  - `dataset/`, `postprocess_results/`, `deep_learning/checkpoints/`, `deep_learning/figures/`.
+  - `dataset/`, `postprocess_results/`, `Deep_learning/checkpoints/`, `Deep_learning/figures/`.
 - Mixed workflows:
   - legacy static demo uses txt/csv; pipeline uses YAML.
 - DOF mapping assumptions:
@@ -224,11 +224,11 @@ If a change affects only formatting/docs, skip runtime checks.
 - Dynamics: `PyFEM_Dynamics/solver/integrator.py`
 - Stress recovery: `PyFEM_Dynamics/solver/stress_recovery.py`
 - Dataset pipeline: `PyFEM_Dynamics/pipeline/data_gen.py`
-- ML dataset loader: `deep_learning/data/dataset.py`
+- ML dataset loader: `Deep_learning/data/dataset.py`
 
 ## 9) Agent Operating Rules (Project-Specific)
 
 - Do not commit `agent.md`.
 - Avoid editing `dataset/` contents; treat it as generated.
 - Prefer to keep changes within one module unless the change is schema-level.
-- When you must touch multiple modules, update producer/consumer together (e.g., `data_gen.py` + `deep_learning/data/dataset.py`).
+- When you must touch multiple modules, update producer/consumer together (e.g., `data_gen.py` + `Deep_learning/data/dataset.py`).

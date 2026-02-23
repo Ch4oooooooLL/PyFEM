@@ -159,7 +159,7 @@ for i in range(1, self.num_steps):
 2.  **空间关系推理**: 通过注意力机制计算力学信号在物理结构中的传递关联。
 3.  **预测任务**: 针对每个单元预测其损伤系数（0.5-1.0）。
 
-*   **模型实现片段** (`./deep_learning/models/gt_model.py`):
+*   **模型实现片段** (`./Deep_learning/models/gt_model.py`):
 ```python
 class GTDamagePredictor(nn.Module):
     def forward(self, x, adj, edge_index):

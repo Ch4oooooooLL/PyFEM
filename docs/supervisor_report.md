@@ -203,12 +203,12 @@ metrics = compute_metrics(all_preds, all_labels, threshold=threshold)
 
 ### 2.4 详细代码路径（相对路径）
 
-- `deep_learning/data/dataset.py`
-- `deep_learning/models/lstm_model.py`
-- `deep_learning/models/pinn_model.py`
-- `deep_learning/train.py`
-- `deep_learning/utils/metrics.py`
-- `deep_learning/utils/visualization.py`
+- `Deep_learning/data/dataset.py`
+- `Deep_learning/models/lstm_model.py`
+- `Deep_learning/models/pinn_model.py`
+- `Deep_learning/train.py`
+- `Deep_learning/utils/metrics.py`
+- `Deep_learning/utils/visualization.py`
 
 ---
 
@@ -284,6 +284,6 @@ $$
 
 ```bash
 python PyFEM_Dynamics/pipeline/data_gen.py
-python deep_learning/train.py --model both --epochs 100 --threshold 0.95
-python deep_learning/utils/visualization.py --checkpoints_dir deep_learning/checkpoints --aggregate_all
+python Deep_learning/train.py --model both --epochs 100 --threshold 0.95
+python Deep_learning/utils/visualization.py --checkpoints_dir Deep_learning/checkpoints --aggregate_all
 ```

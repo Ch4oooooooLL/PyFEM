@@ -18,6 +18,6 @@
       "hidden_dim": 64,
       "lambda_smooth": 0.1
     },
-    "prediction_file": "d:\\CODE\\FEM\\deep_learning\\checkpoints\\predictions_20260223_144232.npz"
+    "prediction_file": "d:\\CODE\\FEM\\Deep_learning\\checkpoints\\predictions_20260223_144232.npz"
   }
 }
