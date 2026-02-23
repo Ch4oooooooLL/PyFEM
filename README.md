@@ -111,7 +111,19 @@ for dof, val in self.dirichlet_bcs:
 \mathbf{M}\ddot{\mathbf{u}}(t) + \mathbf{C}\dot{\mathbf{u}}(t) + \mathbf{K}\mathbf{u}(t) = \mathbf{F}(t)
 ```
 
-系统采用经典的 **Newmark-$\beta$ 隐式积分法**。阻尼矩阵 $\mathbf{C}$ 基于 Rayleigh 比例阻尼模型构建：$\mathbf{C} = \alpha \mathbf{M} + \beta \mathbf{K}$。算法取 $\gamma = 0.5$, $\beta = 0.25$ （平均加速度法）以确保线性系统的无条件稳定性。
+系统采用经典的 **Newmark-β 隐式积分法**。阻尼矩阵 `C` 基于 Rayleigh 比例阻尼模型构建：
+
+```math
+\mathbf{C} = \alpha \mathbf{M} + \beta \mathbf{K}
+```
+
+算法参数取（平均加速度法）：
+
+```math
+\gamma = 0.5,\quad \beta = 0.25
+```
+
+上述参数组合可确保线性系统的无条件稳定性。
 
 *   **核心求解逻辑** (`./PyFEM_Dynamics/solver/integrator.py`):
 ```python
