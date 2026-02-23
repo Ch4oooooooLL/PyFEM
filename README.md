@@ -31,11 +31,11 @@ class Node:
 针对二维拉压桁架单元，其在局部坐标系下的刚度矩阵 $\mathbf{k}^e$ 和一致质量矩阵 $\mathbf{m}^e$ 分别如下所示：
 
 $$
-\mathbf{k}^e = \frac{EA}{L}\begin{bmatrix} 1 & -1 \\\\ -1 & 1 \end{bmatrix}
+\mathbf{k}^e = \frac{EA}{L}\begin{bmatrix} 1 & -1 \\ -1 & 1 \end{bmatrix}
 $$
 
 $$
-\mathbf{m}^e = \frac{\rho A L}{6}\begin{bmatrix} 2 & 1 \\\\ 1 & 2 \end{bmatrix}
+\mathbf{m}^e = \frac{\rho A L}{6}\begin{bmatrix} 2 & 1 \\ 1 & 2 \end{bmatrix}
 $$
 
 *   **实现代码** (`./PyFEM_Dynamics/core/element.py`):
@@ -55,7 +55,7 @@ def get_local_stiffness(self):
 利用**直接刚度法 (Direct Stiffness Method)** 将各单元贡献累加至全局矩阵 $\mathbf{K}$ 与 $\mathbf{M}$ 中。系统在 `solver/assembler.py` 中提供了集中质量矩阵（Lumped Mass Matrix）的选项：
 
 $$
-\mathbf{m}_{\text{lumped}}^e = \frac{\rho A L}{2}\begin{bmatrix} 1 & 0 \\\\ 0 & 1 \end{bmatrix}
+\mathbf{m}_{\text{lumped}}^e = \frac{\rho A L}{2}\begin{bmatrix} 1 & 0 \\ 0 & 1 \end{bmatrix}
 $$
 
 *   **组装代码** (`./PyFEM_Dynamics/solver/assembler.py`):
@@ -74,7 +74,7 @@ def assemble_K(self):
 
 $$
 \begin{cases}
-\mathbf{K}_{ij} = \delta_{ij} \\\\
+\mathbf{K}_{ij} = \delta_{ij} \\
 \mathbf{F}_i = \bar{u}_i
 \end{cases} \quad (\text{对于受约束的自由度 } i)
 $$
