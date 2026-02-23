@@ -165,21 +165,30 @@ def run_fem_solver(
     M = assembler.assemble_M(lumping=True)
     C = NewmarkBetaSolver.compute_rayleigh_damping(M, K, alpha=damping_alpha, beta=damping_beta)
     
+    # 5. 边界处理 (改用划零划一法以提高动力学稳定性)
     bc = BoundaryCondition()
     nodes_dict = {node.node_id: node for node in nodes}
     for node_id, local_dof, value in bcs:
         if node_id in nodes_dict and local_dof < len(nodes_dict[node_id].dofs):
             bc.add_dirichlet_bc(nodes_dict[node_id].dofs[local_dof], value)
     
-    K_mod, _ = bc.apply_penalty_method(K, np.zeros(total_dofs))
+    # 统一处理矩阵，确保边界自由度解耦
+    K_mod, _ = bc.apply_zero_one_method(K, np.zeros(total_dofs))
     M_mod = bc.apply_to_M(M)
     
-    F_t = load_matrix.T.copy()
-    for node_id, local_dof, value in bcs:
-        if node_id in nodes_dict and local_dof < len(nodes_dict[node_id].dofs):
-            F_t[nodes_dict[node_id].dofs[local_dof], :] = value
+    # 保持阻尼矩阵 C 在边界处的清理逻辑，避免在 K_hat 中引入不必要的耦合项
+    C_lil = C.tolil()
+    for dof, _ in bc.dirichlet_bcs:
+        C_lil.rows[dof] = []
+        C_lil.data[dof] = []
+    C_mod = C_lil.tocsc()
     
-    solver = NewmarkBetaSolver(M_mod, C, K_mod, dt=dt, total_T=total_time)
+    # 处理荷载向量矩阵
+    F_t = load_matrix.T.copy()
+    for dof, val in bc.dirichlet_bcs:
+        F_t[dof, :] = val  # 通常边界给定值为 0
+    
+    solver = NewmarkBetaSolver(M_mod, C_mod, K_mod, dt=dt, total_T=total_time)
     U, _, _ = solver.solve(F_t)
     
     sigma_axial, sigma_vm = recover_truss_stress_time_history(elements, U)
