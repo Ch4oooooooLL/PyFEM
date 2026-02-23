@@ -32,67 +32,7 @@ class LoadSpec:
     params: Dict[str, Any]
 
 
-def build_structure_from_yaml(structure_path: str) -> Tuple[List[Node], List[TrussElement2D], List[Tuple[int, int, float]]]:
-    """
-    从YAML文件构建结构模型对象。
-    返回: (nodes, elements, boundary_conditions)
-    """
-    with open(structure_path, 'r', encoding='utf-8') as f:
-        data = yaml.safe_load(f)
-    
-    nodes_data = data['nodes']
-    elements_data = data['elements']
-    boundary_data = data.get('boundary', [])
-    meta = data['metadata']
-    dofs_per_node = meta.get('dofs_per_node', 2)
-    
-    nodes_dict: Dict[int, Node] = {}
-    for node_info in nodes_data:
-        nid = node_info['id']
-        x, y = node_info['coords']
-        nodes_dict[nid] = Node(nid, x, y)
-    
-    nodes = list(nodes_dict.values())
-    nodes.sort(key=lambda n: n.node_id)
-    
-    dof_counter = 0
-    for node in nodes:
-        node.dofs = list(range(dof_counter, dof_counter + dofs_per_node))
-        dof_counter += dofs_per_node
-    
-    elements: List[TrussElement2D] = []
-    for elem_info in elements_data:
-        eid = elem_info['id']
-        n1_id, n2_id = elem_info['nodes']
-        E = elem_info['E']
-        rho = elem_info['rho']
-        A = elem_info['A']
-        I = elem_info.get('I', 0.0)
-        
-        n1 = nodes_dict[n1_id]
-        n2 = nodes_dict[n2_id]
-        mat = Material(E=E, rho=rho)
-        sec = Section(A=A, I=I)
-        
-        elem = TrussElement2D(eid, n1, n2, mat, sec)
-        elements.append(elem)
-    
-    bcs: List[Tuple[int, int, float]] = []
-    for bc_info in boundary_data:
-        node_id = bc_info['node_id']
-        constraints = bc_info['constraints']
-        for constraint in constraints:
-            if constraint == 'ux':
-                local_dof = 0
-            elif constraint == 'uy':
-                local_dof = 1
-            elif constraint == 'rz':
-                local_dof = 2
-            else:
-                continue
-            bcs.append((node_id, local_dof, 0.0))
-    
-    return nodes, elements, bcs
+
 
 
 def generate_load_matrix(
@@ -276,7 +216,7 @@ def generate_dataset(config_path: str = None) -> None:
         output_file = os.path.join(os.path.dirname(config_path), output_file)
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
     
-    nodes, elements, bcs = build_structure_from_yaml(structure_file)
+    nodes, elements, bcs = YAMLParser.build_structure_objects(structure_file)
     num_nodes = len(nodes)
     num_elements = len(elements)
     num_dofs = sum(len(node.dofs) for node in nodes)
@@ -300,7 +240,7 @@ def generate_dataset(config_path: str = None) -> None:
     print(f"  时间: {num_steps} 步, dt={dt}s, 总时长={total_time}s")
     
     for i in range(num_samples):
-        nodes_i, elements_i, bcs_i = build_structure_from_yaml(structure_file)
+        nodes_i, elements_i, bcs_i = YAMLParser.build_structure_objects(structure_file)
         
         for elem_idx, elem in enumerate(elements_i):
             elem.material.E = E_base[elem_idx]

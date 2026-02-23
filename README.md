@@ -60,54 +60,118 @@ $$
 
 ## 3. 使用方法与输入格式
 
-程序支持两套输入体系：
+本项目采用基于 YAML 的统一配置体系，确立了以 `structure.yaml` 为核心的输入规范，彻底弃用了旧版的 CSV/TXT 多文件模式。
 
-### 体系一：传统格式（兼容旧版）
-- `materials.csv`：材料参数（E、rho）
-- `structure_input.txt`：结构、拓扑和边界条件
-- `static_loads.txt`：静载分量
+### 3.1 结构定义文 (`structure.yaml`)
 
-详细格式见 `INPUT_FORMAT.md`。
+用于完整定义有限元模型的几何拓扑、材料库及边界条件。
 
-### 体系二：YAML统一配置（推荐用于深度学习）
+```yaml
+metadata:
+  description: "2D Truss Structure"
+  num_nodes: 5
+  num_elements: 7
+  num_dofs: 10
+  dofs_per_node: 2
 
-- `structure.yaml`：固定结构定义（不参与训练）
-- `dataset_config.yaml`：数据集生成配置
+# 材料库定义
+materials:
+  - name: "steel"
+    E: 2.0e+11    # 弹性模量 (Pa)
+    rho: 7850.0   # 密度 (kg/m^3)
+    nu: 0.3       # 泊松比
 
-**入口文件：**
-- 静力验证：`PyFEM_Dynamics/main.py`
-- 数据集生成：`PyFEM_Dynamics/pipeline/data_gen.py`
-- 深度学习训练：`deep_learning/train.py`
-- 训练结果后处理：`deep_learning/utils/visualization.py`
+nodes:
+  - id: 0
+    coords: [0.0, 0.0]
+  # ...
 
-**运行示例：**
+elements:
+  - id: 0
+    nodes: [0, 1]
+    material: "steel"  # 引用材料名
+    A: 0.005           # 截面积 (m^2)
+    I: 0.0             # 惯性矩 (m^4)
+  # ...
+
+boundary:
+  - node_id: 0
+    constraints: [ux, uy]  # 固定端
+```
+
+### 3.2 数据集配置 (`dataset_config.yaml`)
+
+用于批量生成动力响应数据集。
+
+```yaml
+structure_file: structure.yaml
+output_file: dataset/train.npz
+
+time:
+  dt: 0.01          # 时间步长
+  total_time: 2.0   # 总时长
+
+generation:
+  num_samples: 1000 # 生成样本总数
+  random_seed: 42   # 随机种子
+
+damage:
+  enabled: true
+  min_damaged_elements: 1
+  max_damaged_elements: 3
+  reduction_range: [0.5, 0.9] # 损伤衰减系数范围
+
+load_generation:
+  mode: "random"
+  loads:
+    - node_id: 3
+      dof: "fx"
+      pattern: "pulse"
+      F0_range: [8000, 12000]
+      t_start_range: [0.0, 0.05]
+      t_end_range: [0.15, 0.25]
+```
+
+### 3.3 支持的载荷模式
+
+在 `dataset_config.yaml` 的 `load_generation` 部分，支持以下模式：
+
+| 模式 | 公式 | 参数说明 |
+|------|------|------|
+| `pulse` | F(t) = F0 (t_start ≤ t < t_end) | `F0_range`, `t_start_range`, `t_end_range` |
+| `harmonic` | F(t) = F0 * sin(2πft) | `F0_range`, `freq`, `duration` |
+| `half_sine` | F(t) = F0 * sin(π(t-t_s)/(t_e-t_s)) | `F0_range`, `t_start_range`, `t_end_range` |
+| `ramp` | F(t) = F0 * (t-t_s)/t_ramp | `F0`, `t_start`, `t_ramp` |
+| `gaussian` | 脉冲型高斯载荷 | `F0_range`, `t0_range`, `sigma_range` |
+
+### 3.4 运行指南
+
+程序的主要功能通过以下入口访问：
 
 ```bash
-# 1) 静力验证
+# 1. 静力验证（检查模型正确性）
 python PyFEM_Dynamics/main.py
 
-# 2) 批量生成训练数据（dataset/train.npz）
+# 2. 批量生成动力响应数据集（用于深度学习）
 python PyFEM_Dynamics/pipeline/data_gen.py
 
-# 3) 训练深度学习模型
-pip install -r deep_learning/requirements.txt
-python deep_learning/train.py --model both --epochs 100 --threshold 0.95
+# 3. 训练损伤识别模型（LSTM / PINN）
+python deep_learning/train.py --model both --epochs 100
 
-# 4) 生成训练结果可视化报告
+# 4. 生成可视化评估报告
 python deep_learning/utils/visualization.py --checkpoints_dir deep_learning/checkpoints --aggregate_all
 ```
 
-**输出格式：**
-- 统一 NPZ 文件：`dataset/train.npz`
+### 3.5 输出格式说明
+
+- **数据集 (`dataset/train.npz`)**:
   - `load`: (N, T, DOF) - 载荷时程
   - `E`: (N, elem) - 弹性模量
   - `disp`: (N, T, DOF) - 位移响应
-  - `stress`: (N, T, elem) - 应力响应
-  - `damage`: (N, elem) - 损伤标签
-- 训练输出：
-  - 权重文件：`deep_learning/checkpoints/*.pth`
-  - 指标文件：`deep_learning/checkpoints/results_*.json`
-  - 可视化报告：`deep_learning/figures/report_*/`
+  - `stress`: (N, T, elem) - 单元应力响应
+  - `damage`: (N, elem) - 损伤系数 (1.0表示无损)
+- **元数据 (`metadata.json`)**: 记录数据集对应的物理参数及维度信息。
+- **训练成果**: 包含 `.pth` 权重文件、`.json` 指标文件及自动生成的 `figures/` 可视化报告。
 
 ## 4. 算例与结果展示
 

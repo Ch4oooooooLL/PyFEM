@@ -12,242 +12,12 @@ from core.section import Section
 
 
 @dataclass
-class DynamicLoadRange:
-    node_id: int
-    fx_min: float
-    fx_max: float
-    fy_min: float
-    fy_max: float
-    t_start_min: float
-    t_start_max: float
-    t_end_min: float
-    t_end_max: float
-
-
-class IOParser:
-    """
-    负责解析材料、结构、静载和动载范围配置。
-    """
-
-    @staticmethod
-    def load_materials(file_path: str) -> Dict[int, Material]:
-        """
-        读取材料属性定义的 CSV 文件。
-        格式: id, E, rho
-        """
-        materials: Dict[int, Material] = {}
-        with open(file_path, mode="r", encoding="utf-8") as f:
-            reader = csv.reader(f)
-            next(reader, None)
-            for row in reader:
-                if not row or row[0].strip().startswith("#"):
-                    continue
-                if len(row) < 3:
-                    raise ValueError(f"Invalid material row in {file_path}: {row}")
-                mat_id = int(row[0].strip())
-                e_mod = float(row[1].strip())
-                rho = float(row[2].strip())
-                materials[mat_id] = Material(E=e_mod, rho=rho)
-        return materials
-
-    @staticmethod
-    def load_structure(
-        file_path: str, materials: Dict[int, Material]
-    ) -> Tuple[List[Node], List[Element2D], List[Tuple[int, int, float]], Dict[str, str]]:
-        """
-        读取结构定义文件。
-        支持:
-        - NODE, id, x, y
-        - ELEM, id, type, node1_id, node2_id, mat_id, section_A, section_I
-        - BC, node_id, local_dof, value
-        - CONFIG, key, value
-        """
-        nodes_dict: Dict[int, Node] = {}
-        elements: List[Element2D] = []
-        bcs: List[Tuple[int, int, float]] = []
-        configs: Dict[str, str] = {}
-
-        with open(file_path, mode="r", encoding="utf-8") as f:
-            for lineno, raw_line in enumerate(f, start=1):
-                line = raw_line.strip()
-                if not line or line.startswith("#"):
-                    continue
-
-                parts = [p.strip() for p in line.split(",")]
-                cmd = parts[0].upper()
-
-                if cmd == "NODE":
-                    if len(parts) != 4:
-                        raise ValueError(f"{file_path}:{lineno} NODE expects 4 fields")
-                    node_id = int(parts[1])
-                    x = float(parts[2])
-                    y = float(parts[3])
-                    nodes_dict[node_id] = Node(node_id, x, y)
-                elif cmd == "ELEM":
-                    if len(parts) != 8:
-                        raise ValueError(f"{file_path}:{lineno} ELEM expects 8 fields")
-
-                    elem_id = int(parts[1])
-                    elem_type = parts[2]
-                    n1 = int(parts[3])
-                    n2 = int(parts[4])
-                    mat_id = int(parts[5])
-                    sec_a = float(parts[6])
-                    sec_i = float(parts[7])
-
-                    if n1 not in nodes_dict or n2 not in nodes_dict:
-                        raise ValueError(
-                            f"{file_path}:{lineno} ELEM references undefined node(s): {n1}, {n2}"
-                        )
-                    if mat_id not in materials:
-                        raise ValueError(f"{file_path}:{lineno} unknown material id: {mat_id}")
-
-                    # 每个单元独立持有材料对象，避免损伤修改时串扰
-                    base_mat = materials[mat_id]
-                    mat = Material(E=base_mat.E, rho=base_mat.rho)
-                    sec = Section(A=sec_a, I=sec_i)
-
-                    if elem_type.upper() == "TRUSS2D":
-                        element = TrussElement2D(
-                            elem_id, nodes_dict[n1], nodes_dict[n2], mat, sec
-                        )
-                    elif elem_type.upper() == "BEAM2D":
-                        element = BeamElement2D(
-                            elem_id, nodes_dict[n1], nodes_dict[n2], mat, sec
-                        )
-                    else:
-                        raise ValueError(f"{file_path}:{lineno} unknown element type: {elem_type}")
-                    elements.append(element)
-                elif cmd == "BC":
-                    if len(parts) != 4:
-                        raise ValueError(f"{file_path}:{lineno} BC expects 4 fields")
-                    node_id = int(parts[1])
-                    local_dof = int(parts[2])
-                    value = float(parts[3])
-                    bcs.append((node_id, local_dof, value))
-                elif cmd == "CONFIG":
-                    if len(parts) != 3:
-                        raise ValueError(f"{file_path}:{lineno} CONFIG expects 3 fields")
-                    configs[parts[1]] = parts[2]
-                elif cmd in {"LOAD", "DLOAD", "SLOAD", "DLOAD_RANGE"}:
-                    raise ValueError(
-                        f"{file_path}:{lineno} load directives are not allowed in structure file"
-                    )
-                else:
-                    raise ValueError(f"{file_path}:{lineno} unknown directive: {cmd}")
-
-        nodes = list(nodes_dict.values())
-        nodes.sort(key=lambda n: n.node_id)
-
-        has_beam = any(isinstance(e, BeamElement2D) for e in elements)
-        dofs_per_node = 3 if has_beam else 2
-
-        dof_count = 0
-        for node in nodes:
-            node.dofs = list(range(dof_count, dof_count + dofs_per_node))
-            dof_count += dofs_per_node
-
-        return nodes, elements, bcs, configs
-
-    @staticmethod
-    def load_static_loads(file_path: str) -> List[Tuple[int, float, float]]:
-        """
-        读取静力载荷文件。
-        支持:
-        - SLOAD, node_id, Fx, Fy
-        """
-        static_loads: List[Tuple[int, float, float]] = []
-
-        with open(file_path, mode="r", encoding="utf-8") as f:
-            for lineno, raw_line in enumerate(f, start=1):
-                line = raw_line.strip()
-                if not line or line.startswith("#"):
-                    continue
-
-                parts = [p.strip() for p in line.split(",")]
-                cmd = parts[0].upper()
-
-                if cmd != "SLOAD":
-                    raise ValueError(f"{file_path}:{lineno} only SLOAD is allowed")
-                if len(parts) != 4:
-                    raise ValueError(f"{file_path}:{lineno} SLOAD expects 4 fields")
-
-                node_id = int(parts[1])
-                fx = float(parts[2])
-                fy = float(parts[3])
-                static_loads.append((node_id, fx, fy))
-
-        return static_loads
-
-    @staticmethod
-    def load_dynamic_load_specs(
-        file_path: str,
-    ) -> Tuple[List[DynamicLoadRange], Dict[str, str]]:
-        """
-        读取动力载荷范围配置文件。
-        支持:
-        - CONFIG, key, value
-        - DLOAD_RANGE, node_id, fx_min, fx_max, fy_min, fy_max, t_start_min, t_start_max, t_end_min, t_end_max
-        """
-        specs: List[DynamicLoadRange] = []
-        configs: Dict[str, str] = {}
-
-        with open(file_path, mode="r", encoding="utf-8") as f:
-            for lineno, raw_line in enumerate(f, start=1):
-                line = raw_line.strip()
-                if not line or line.startswith("#"):
-                    continue
-
-                parts = [p.strip() for p in line.split(",")]
-                cmd = parts[0].upper()
-
-                if cmd == "CONFIG":
-                    if len(parts) != 3:
-                        raise ValueError(f"{file_path}:{lineno} CONFIG expects 3 fields")
-                    configs[parts[1]] = parts[2]
-                    continue
-
-                if cmd != "DLOAD_RANGE":
-                    raise ValueError(
-                        f"{file_path}:{lineno} only CONFIG and DLOAD_RANGE are allowed"
-                    )
-                if len(parts) != 10:
-                    raise ValueError(f"{file_path}:{lineno} DLOAD_RANGE expects 10 fields")
-
-                spec = DynamicLoadRange(
-                    node_id=int(parts[1]),
-                    fx_min=float(parts[2]),
-                    fx_max=float(parts[3]),
-                    fy_min=float(parts[4]),
-                    fy_max=float(parts[5]),
-                    t_start_min=float(parts[6]),
-                    t_start_max=float(parts[7]),
-                    t_end_min=float(parts[8]),
-                    t_end_max=float(parts[9]),
-                )
-
-                if spec.fx_min > spec.fx_max:
-                    raise ValueError(f"{file_path}:{lineno} invalid fx range")
-                if spec.fy_min > spec.fy_max:
-                    raise ValueError(f"{file_path}:{lineno} invalid fy range")
-                if spec.t_start_min > spec.t_start_max:
-                    raise ValueError(f"{file_path}:{lineno} invalid t_start range")
-                if spec.t_end_min > spec.t_end_max:
-                    raise ValueError(f"{file_path}:{lineno} invalid t_end range")
-                if spec.t_end_max <= spec.t_start_min:
-                    raise ValueError(f"{file_path}:{lineno} no feasible window where t_end > t_start")
-
-                specs.append(spec)
-
-        return specs, configs
-
-
-@dataclass
 class StructureData:
     node_coords: np.ndarray
     element_conn: np.ndarray
     E_base: np.ndarray
     rho: np.ndarray
+    nu_base: np.ndarray
     A: np.ndarray
     I: np.ndarray
     bc_mask: np.ndarray
@@ -264,6 +34,85 @@ class YAMLParser:
     """
 
     @staticmethod
+    def build_structure_objects(structure_path: str) -> Tuple[List[Node], List[TrussElement2D], List[Tuple[int, int, float]]]:
+        """
+        从YAML文件构建结构模型对象（Node, Element等）。
+        返回: (nodes, elements, boundary_conditions)
+        """
+        with open(structure_path, 'r', encoding='utf-8') as f:
+            data = yaml.safe_load(f)
+        
+        # 1. 解析材料库
+        materials_data = data.get('materials', [])
+        materials_dict: Dict[str, Material] = {}
+        for mat_info in materials_data:
+            name = mat_info['name']
+            E = mat_info['E']
+            rho = mat_info.get('rho', 0.0)
+            nu = mat_info.get('nu', 0.3)
+            materials_dict[name] = Material(E=E, rho=rho, nu=nu)
+
+        nodes_data = data['nodes']
+        elements_data = data['elements']
+        boundary_data = data.get('boundary', [])
+        meta = data['metadata']
+        dofs_per_node = meta.get('dofs_per_node', 2)
+        
+        nodes_dict: Dict[int, Node] = {}
+        for node_info in nodes_data:
+            nid = node_info['id']
+            x, y = node_info['coords']
+            nodes_dict[nid] = Node(nid, x, y)
+        
+        nodes = list(nodes_dict.values())
+        nodes.sort(key=lambda n: n.node_id)
+        
+        dof_counter = 0
+        for node in nodes:
+            node.dofs = list(range(dof_counter, dof_counter + dofs_per_node))
+            dof_counter += dofs_per_node
+        
+        elements: List[TrussElement2D] = []
+        for elem_info in elements_data:
+            eid = elem_info['id']
+            n1_id, n2_id = elem_info['nodes']
+            A = elem_info['A']
+            I = elem_info.get('I', 0.0)
+            
+            # 引用材料
+            mat_name = elem_info['material']
+            if mat_name not in materials_dict:
+                raise ValueError(f"Element {eid} references undefined material: {mat_name}")
+            
+            base_mat = materials_dict[mat_name]
+            # 深度拷贝材料对象，方便后续可能的损伤修改
+            mat = Material(E=base_mat.E, rho=base_mat.rho, nu=base_mat.nu)
+            
+            n1 = nodes_dict[n1_id]
+            n2 = nodes_dict[n2_id]
+            sec = Section(A=A, I=I)
+            
+            elem = TrussElement2D(eid, n1, n2, mat, sec)
+            elements.append(elem)
+        
+        bcs: List[Tuple[int, int, float]] = []
+        for bc_info in boundary_data:
+            node_id = bc_info['node_id']
+            constraints = bc_info['constraints']
+            for constraint in constraints:
+                if constraint == 'ux':
+                    local_dof = 0
+                elif constraint == 'uy':
+                    local_dof = 1
+                elif constraint == 'rz':
+                    local_dof = 2
+                else:
+                    continue
+                bcs.append((node_id, local_dof, 0.0))
+        
+        return nodes, elements, bcs
+
+    @staticmethod
     def load_structure_yaml(file_path: str) -> StructureData:
         """
         从YAML文件加载结构定义。
@@ -273,6 +122,7 @@ class YAMLParser:
             data = yaml.safe_load(f)
         
         meta = data['metadata']
+        materials_data = data.get('materials', [])
         nodes_data = data['nodes']
         elements_data = data['elements']
         boundary_data = data.get('boundary', [])
@@ -281,11 +131,15 @@ class YAMLParser:
         num_elements = len(elements_data)
         dofs_per_node = meta.get('dofs_per_node', 2)
         num_dofs = num_nodes * dofs_per_node
+
+        # 处理材料查找表
+        mats_lookup = {m['name']: m for m in materials_data}
         
         node_coords = np.zeros((num_nodes, 2), dtype=float)
         element_conn = np.zeros((num_elements, 2), dtype=int)
         E_base = np.zeros(num_elements, dtype=float)
         rho = np.zeros(num_elements, dtype=float)
+        nu_base = np.zeros(num_elements, dtype=float)
         A = np.zeros(num_elements, dtype=float)
         I = np.zeros(num_elements, dtype=float)
         
@@ -300,10 +154,15 @@ class YAMLParser:
             eid = elem['id']
             element_conn[eid, 0] = elem['nodes'][0]
             element_conn[eid, 1] = elem['nodes'][1]
-            E_base[eid] = elem['E']
-            rho[eid] = elem['rho']
             A[eid] = elem['A']
             I[eid] = elem.get('I', 0.0)
+            
+            # 材料映射
+            mat_name = elem['material']
+            mat_info = mats_lookup[mat_name]
+            E_base[eid] = mat_info['E']
+            rho[eid] = mat_info.get('rho', 0.0)
+            nu_base[eid] = mat_info.get('nu', 0.3)
         
         bc_mask = np.zeros(num_dofs, dtype=bool)
         bc_values = np.zeros(num_dofs, dtype=float)
@@ -326,6 +185,7 @@ class YAMLParser:
             element_conn=element_conn,
             E_base=E_base,
             rho=rho,
+            nu_base=nu_base,
             A=A,
             I=I,
             bc_mask=bc_mask,
