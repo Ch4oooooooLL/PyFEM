@@ -123,5 +123,4 @@ GT 模型在首个 5 轮即展现出极强的特征捕获能力，其验证损�
 校准曲线反映了模型输出预测值与实际发现损伤频率的一致性。GT 模型的曲线更接近 $45^\circ$ 对角线，意味着其损伤预测具有极高的物理可信度。
 ![Calibration Curve](docs/images/dl_results/calibration_curve.png)
 
----
-**致谢**: 本项目为工程力学本科生力学数值实验与 AI+Science 交叉研究成果。
+
