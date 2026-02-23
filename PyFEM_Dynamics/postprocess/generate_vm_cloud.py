@@ -11,8 +11,9 @@ ROOT_DIR = os.path.dirname(PROJECT_DIR)
 if PROJECT_DIR not in sys.path:
     sys.path.insert(0, PROJECT_DIR)
 
-from pipeline.data_gen import build_structure_from_yaml, generate_load_matrix, run_fem_solver
+from pipeline.data_gen import generate_load_matrix, run_fem_solver
 from postprocess.plotter import Plotter
+from core.io_parser import YAMLParser
 
 
 def regenerate_vm_cloud(
@@ -21,6 +22,7 @@ def regenerate_vm_cloud(
     sample_id: int = 0,
     frame_step: int = 10,
     representative_frame: int = 100,
+    scale_factor: float = 1000.0,
 ) -> str:
     with open(config_path, "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
@@ -37,11 +39,9 @@ def regenerate_vm_cloud(
     seed = int(config.get("generation", {}).get("random_seed", 42))
     rng = np.random.default_rng(seed + int(sample_id))
 
-    nodes, elements, bcs = build_structure_from_yaml(structure_file)
+    nodes, elements, bcs = YAMLParser.build_structure_objects(structure_file)
     num_nodes = len(nodes)
-    dofs_per_node = int(config.get("metadata", {}).get("dofs_per_node", 2))
-    if dofs_per_node <= 0:
-        dofs_per_node = 2
+    dofs_per_node = 2
 
     load_specs = config["load_generation"]["loads"]
     damping_cfg = config.get("damping", {})
@@ -49,7 +49,7 @@ def regenerate_vm_cloud(
     beta = float(damping_cfg.get("beta", 0.01))
 
     load_matrix = generate_load_matrix(load_specs, num_nodes, dofs_per_node, dt, num_steps, rng)
-    _, stress_vm = run_fem_solver(nodes, elements, bcs, load_matrix, dt, total_time, alpha, beta)
+    U, stress_vm = run_fem_solver(nodes, elements, bcs, load_matrix, dt, total_time, alpha, beta)
 
     sample_dir = os.path.join(output_dir, f"sample_{sample_id:06d}")
     os.makedirs(sample_dir, exist_ok=True)
@@ -66,24 +66,13 @@ def regenerate_vm_cloud(
             vm_values=stress_vm[frame_idx],
             title=f"von Mises Stress (sample {sample_id}, step {frame_idx})",
             save_path=frame_path,
+            U=U[frame_idx],
+            scale_factor=scale_factor,
             vmin=vmin,
             vmax=vmax,
         )
 
-    rep_frame = min(max(int(representative_frame), 0), stress_vm.shape[0] - 1)
-    rep_path = os.path.join(sample_dir, f"frame_{rep_frame:06d}.png")
-    if not os.path.exists(rep_path):
-        Plotter.plot_truss_vm_frame(
-            nodes=nodes,
-            elements=elements,
-            vm_values=stress_vm[rep_frame],
-            title=f"von Mises Stress (sample {sample_id}, step {rep_frame})",
-            save_path=rep_path,
-            vmin=vmin,
-            vmax=vmax,
-        )
-
-    return rep_path
+    return os.path.join(sample_dir, f"frame_{representative_frame:06d}.png")
 
 
 def main() -> None:
@@ -97,6 +86,7 @@ def main() -> None:
     parser.add_argument("--sample-id", type=int, default=0)
     parser.add_argument("--frame-step", type=int, default=10)
     parser.add_argument("--representative-frame", type=int, default=100)
+    parser.add_argument("--scale-factor", type=float, default=1000.0)
     args = parser.parse_args()
 
     rep_path = regenerate_vm_cloud(
@@ -105,6 +95,7 @@ def main() -> None:
         sample_id=args.sample_id,
         frame_step=args.frame_step,
         representative_frame=args.representative_frame,
+        scale_factor=args.scale_factor,
     )
     print(f"VM cloud regenerated. Representative frame: {rep_path}")
 

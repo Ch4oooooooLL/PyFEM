@@ -217,20 +217,25 @@ class Plotter:
         vm_values: np.ndarray,
         title: str,
         save_path: str,
+        U: Optional[np.ndarray] = None,
+        scale_factor: float = 1.0,
         vmin: Optional[float] = None,
         vmax: Optional[float] = None,
     ):
         """
-        绘制桁架单元 von Mises 应力(近似)云图单帧。
+        绘制桁架单元 von Mises 应力(近似)云图单帧，支持位移叠加。
         """
         if len(elements) != len(vm_values):
             raise ValueError("vm_values length must match number of elements")
 
-        for element in elements:
-            if not isinstance(element, TrussElement2D):
-                raise NotImplementedError("plot_truss_vm_frame only supports TrussElement2D")
-
         fig, ax = plt.subplots(figsize=(8, 6))
+        
+        # 1. 绘制初始参考结构 (浅灰色)
+        for element in elements:
+            ax.plot([element.node1.x, element.node2.x], 
+                    [element.node1.y, element.node2.y], 
+                    "k--", linewidth=0.8, alpha=0.2)
+
         cmap = plt.cm.viridis
         vmin = np.min(vm_values) if vmin is None else vmin
         vmax = np.max(vm_values) if vmax is None else vmax
@@ -238,18 +243,37 @@ class Plotter:
             vmax = vmin + 1.0
         norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
 
+        # 2. 绘制应力单元 (应用位移)
         for idx, element in enumerate(elements):
-            x_coords = [element.node1.x, element.node2.x]
-            y_coords = [element.node1.y, element.node2.y]
+            n1, n2 = element.node1, element.node2
+            
+            x1, y1 = n1.x, n1.y
+            x2, y2 = n2.x, n2.y
+            
+            if U is not None:
+                x1 += U[n1.dofs[0]] * scale_factor
+                y1 += U[n1.dofs[1]] * scale_factor
+                x2 += U[n2.dofs[0]] * scale_factor
+                y2 += U[n2.dofs[1]] * scale_factor
+                
             color = cmap(norm(vm_values[idx]))
-            ax.plot(x_coords, y_coords, "-", color=color, linewidth=2.2)
+            ax.plot([x1, x2], [y1, y2], "-", color=color, linewidth=2.5, zorder=4)
 
-        ax.scatter([n.x for n in nodes], [n.y for n in nodes], s=20, c="black", zorder=3)
+        # 绘制节点
+        if U is not None:
+            node_x = [n.x + U[n.dofs[0]] * scale_factor for n in nodes]
+            node_y = [n.y + U[n.dofs[1]] * scale_factor for n in nodes]
+        else:
+            node_x = [n.x for n in nodes]
+            node_y = [n.y for n in nodes]
+            
+        ax.scatter(node_x, node_y, s=15, c="black", zorder=5)
+        
         ax.set_aspect("equal", "box")
         ax.set_xlabel("X Coordinate (m)")
         ax.set_ylabel("Y Coordinate (m)")
         ax.set_title(title)
-        ax.grid(True, alpha=0.35, linestyle="--")
+        ax.grid(True, alpha=0.3, linestyle="--")
 
         sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
         sm.set_array([])
