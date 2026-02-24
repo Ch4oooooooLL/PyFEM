@@ -15,7 +15,7 @@
 ### 2.1 参数化建模与前处理
 模型通过 YAML 配置文件定义几何拓扑、材料属性 ($E$, $\rho$, $\nu$) 及边界约束。程序内部通过 `Node` 和 `Element` 对象建立力学关联。当前前处理流程支持 `random_multi_point` 随机工况生成：在非约束节点上随机选择载荷作用点与 `fx/fy` 方向，并在给定参数区间内采样幅值、频率、相位与时序参数；每个样本均作为独立工况进行求解。
 
-*   **节点构造片段** (`./PyFEM_Dynamics/core/node.py`):
+*   **节点构造片段** ([`./PyFEM_Dynamics/core/node.py`](./PyFEM_Dynamics/core/node.py)):
 ```python
 class Node:
     def __init__(self, node_id, x, y):
@@ -25,10 +25,10 @@ class Node:
 ```
 
 *   **相关文件**: 
-    - `./structure.yaml`: 结构配置文件。
-    - `./PyFEM_Dynamics/core/io_parser.py`: 负责解析配置并自动构建节点与单元对象。
-    - `./dataset_config.yaml`: 随机多点载荷与参数区间配置文件。
-    - `./PyFEM_Dynamics/pipeline/data_gen.py`: 工况采样与数据集生成逻辑（当前规模 20,000 样本）。
+    - [`./structure.yaml`](./structure.yaml): 结构配置文件。
+    - [`./PyFEM_Dynamics/core/io_parser.py`](./PyFEM_Dynamics/core/io_parser.py): 负责解析配置并自动构建节点与单元对象。
+    - [`./dataset_config.yaml`](./dataset_config.yaml): 随机多点载荷与参数区间配置文件。
+    - [`./PyFEM_Dynamics/pipeline/data_gen.py`](./PyFEM_Dynamics/pipeline/data_gen.py): 工况采样与数据集生成逻辑（当前规模 20,000 样本）。
 
 ### 2.2 单元列式与矩阵计算
 针对二维拉压桁架单元，其在局部坐标系下的刚度矩阵 $\mathbf{k}^e$ 和一致质量矩阵 $\mathbf{m}^e$ 分别如下所示：
@@ -49,7 +49,7 @@ class Node:
 \end{bmatrix}
 ```
 
-*   **实现代码** (`./PyFEM_Dynamics/core/element.py`):
+*   **实现代码** ([`./PyFEM_Dynamics/core/element.py`](./PyFEM_Dynamics/core/element.py)):
 ```python
 def get_local_stiffness(self):
     E, A, L = self.material.E, self.section.A, self.length
@@ -63,7 +63,7 @@ def get_local_stiffness(self):
 ```
 
 ### 2.3 全局矩阵组装
-利用**直接刚度法 (Direct Stiffness Method)** 将各单元贡献累加至全局矩阵 $\mathbf{K}$ 与 $\mathbf{M}$ 中。系统在 `solver/assembler.py` 中提供了集中质量矩阵（Lumped Mass Matrix）的选项：
+利用**直接刚度法 (Direct Stiffness Method)** 将各单元贡献累加至全局矩阵 $\mathbf{K}$ 与 $\mathbf{M}$ 中。系统在 [`./PyFEM_Dynamics/solver/assembler.py`](./PyFEM_Dynamics/solver/assembler.py) 中提供了集中质量矩阵（Lumped Mass Matrix）的选项：
 
 ```math
 \mathbf{m}_{\text{lumped}}^e = \frac{\rho A L}{2}
@@ -73,7 +73,7 @@ def get_local_stiffness(self):
 \end{bmatrix}
 ```
 
-*   **组装代码** (`./PyFEM_Dynamics/solver/assembler.py`):
+*   **组装代码** ([`./PyFEM_Dynamics/solver/assembler.py`](./PyFEM_Dynamics/solver/assembler.py)):
 ```python
 def assemble_K(self):
     K_global = sp.lil_matrix((self.total_dofs, self.total_dofs))
@@ -96,7 +96,7 @@ def assemble_K(self):
 其中，公式中的自由度索引 `i` 对应受约束自由度。
 该方法相比罚函数法能更好地保证节点位移的精确解，避免了数值溢出风险。
 
-*   **实现代码** (`./PyFEM_Dynamics/solver/boundary.py`):
+*   **实现代码** ([`./PyFEM_Dynamics/solver/boundary.py`](./PyFEM_Dynamics/solver/boundary.py)):
 ```python
 # 边界处理核心片段
 for dof in bc_dofs:
@@ -128,7 +128,7 @@ for dof, val in self.dirichlet_bcs:
 
 上述参数组合可确保线性系统的无条件稳定性。
 
-*   **核心求解逻辑** (`./PyFEM_Dynamics/solver/integrator.py`):
+*   **核心求解逻辑** ([`./PyFEM_Dynamics/solver/integrator.py`](./PyFEM_Dynamics/solver/integrator.py)):
 ```python
 # 时间步迭代循环
 for i in range(1, self.num_steps):
@@ -154,9 +154,9 @@ for i in range(1, self.num_steps):
 
 ### 3.1 物理增强数据集生成
 利用 FEM 内联内核自动生成了 **20,000** 组包含不同损伤场景（单元随机折减）与随机多点激振的数据集。
-*   **数据生成代码**: `./PyFEM_Dynamics/pipeline/data_gen.py`。
-*   **配置文件**: `./dataset_config.yaml`。
-*   **数据文件**: `./dataset/train.npz`。
+*   **数据生成代码**: [`./PyFEM_Dynamics/pipeline/data_gen.py`](./PyFEM_Dynamics/pipeline/data_gen.py)。
+*   **配置文件**: [`./dataset_config.yaml`](./dataset_config.yaml)。
+*   **数据文件**: [`./dataset/train.npz`](./dataset/train.npz)。
 
 ### 3.2 图变换网络 (Graph Transformer) 架构
 考虑到工程结构天然具有图拓扑（Graph Topology）特征，模型采用了 **Graph Transformer** 网络：
@@ -164,7 +164,7 @@ for i in range(1, self.num_steps):
 2.  **空间关系推理**: 通过注意力机制计算力学信号在物理结构中的传递关联。
 3.  **预测任务**: 针对每个单元预测其损伤系数（0.5-1.0）。
 
-*   **模型实现片段** (`./Deep_learning/models/gt_model.py`):
+*   **模型实现片段** ([`./Deep_learning/models/gt_model.py`](./Deep_learning/models/gt_model.py)):
 ```python
 class GTDamagePredictor(nn.Module):
     def forward(self, x, adj, edge_index):
@@ -231,7 +231,7 @@ class GTDamagePredictor(nn.Module):
 *   **工况配置**: [`condition_case.yaml`](./condition_case.yaml)
 *   **核心管线**: [`condition_pipeline.py`](./Condition_prediction/pipelines/condition_pipeline.py)
 
-其中，`condition_case.yaml` 统一定义了结构文件、时间参数、阻尼、载荷作用工况、损伤工况、模型推理设置以及输出路径。
+其中，[`./condition_case.yaml`](./condition_case.yaml) 统一定义了结构文件、时间参数、阻尼、载荷作用工况、损伤工况、模型推理设置以及输出路径。
 
 ### 4.2 统一计算流程
 该模块按以下步骤完成一次完整工况预测：
