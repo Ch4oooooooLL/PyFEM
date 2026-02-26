@@ -66,7 +66,7 @@ def get_local_stiffness(self):
 利用**直接刚度法 (Direct Stiffness Method)** 将各单元贡献累加至全局矩阵 $\mathbf{K}$ 与 $\mathbf{M}$ 中。系统在 [`./PyFEM_Dynamics/solver/assembler.py`](./PyFEM_Dynamics/solver/assembler.py) 中提供了集中质量矩阵（Lumped Mass Matrix）的选项：
 
 ```math
-\mathbf{m}_{\text{lumped}}^e = \frac{\rho A L}{2}
+\mathbf{m}_{\mathrm{lumped}}^e = \frac{\rho A L}{2}
 \begin{bmatrix}
 1 & 0 \\
 0 & 1
@@ -89,7 +89,7 @@ def assemble_K(self):
 
 ```math
 \begin{cases}
-\mathbf{K}_{ij} = \delta_{ij} \\
+\mathbf{K}_{ij} = \delta_{ij} \\[4pt]
 \mathbf{F}_i = \bar{u}_i
 \end{cases}
 ```
