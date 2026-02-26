@@ -2,7 +2,7 @@
 
 # Core
 numpy>=1.21.0
-scipy>=1.7.0
+scipy>=1.10.0
 
 # Visualization
 matplotlib>=3.5.0
@@ -13,6 +13,7 @@ pyyaml>=6.0
 
 # Deep Learning
 torch>=2.0.0
+tqdm>=4.65.0
 
 # Jupyter Support
 ipywidgets>=8.0.0
