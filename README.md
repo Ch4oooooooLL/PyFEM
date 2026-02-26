@@ -34,19 +34,19 @@ class Node:
 针对二维拉压桁架单元，其在局部坐标系下的刚度矩阵 $\mathbf{k}^e$ 和一致质量矩阵 $\mathbf{m}^e$ 分别如下所示：
 
 $$
-\mathbf{k}^e = \frac{EA}{L}
-\begin{bmatrix}
-1 & -1 \\
--1 & 1
-\end{bmatrix}
+\mathbf{k}^e = \frac{EA}{L} \
+\begin{bmatrix} \
+1 & -1 \\ \
+-1 & 1 \
+\end{bmatrix} \
 $$
 
 $$
-\mathbf{m}^e = \frac{\rho A L}{6}
-\begin{bmatrix}
-2 & 1 \\
-1 & 2
-\end{bmatrix}
+\mathbf{m}^e = \frac{\rho A L}{6} \
+\begin{bmatrix} \
+2 & 1 \\ \
+1 & 2 \
+\end{bmatrix} \
 $$
 
 *   **实现代码** ([`./PyFEM_Dynamics/core/element.py`](./PyFEM_Dynamics/core/element.py)):
@@ -66,11 +66,11 @@ def get_local_stiffness(self):
 利用**直接刚度法 (Direct Stiffness Method)** 将各单元贡献累加至全局矩阵 $\mathbf{K}$ 与 $\mathbf{M}$ 中。系统在 [`./PyFEM_Dynamics/solver/assembler.py`](./PyFEM_Dynamics/solver/assembler.py) 中提供了集中质量矩阵（Lumped Mass Matrix）的选项：
 
 $$
-\mathbf{m}_{\mathrm{lumped}}^e = \frac{\rho A L}{2}
-\begin{bmatrix}
-1 & 0 \\
-0 & 1
-\end{bmatrix}
+\mathbf{m}_{\mathrm{lumped}}^e = \frac{\rho A L}{2} \
+\begin{bmatrix} \
+1 & 0 \\ \
+0 & 1 \
+\end{bmatrix} \
 $$
 
 *   **组装代码** ([`./PyFEM_Dynamics/solver/assembler.py`](./PyFEM_Dynamics/solver/assembler.py)):
@@ -88,10 +88,10 @@ def assemble_K(self):
 为处理本质边界条件并消除矩阵奇异性，程序实现了 **划零划一法 (Zero-One Substitution Method)**：
 
 $$
-\begin{cases}
-\mathbf{K}_{ij} = \delta_{ij} \\[4pt]
-\mathbf{F}_i = \bar{u}_i
-\end{cases}
+\begin{cases} \
+\mathbf{K}_{ij} = \delta_{ij} \\\ \
+\mathbf{F}_i = \bar{u}_i \
+\end{cases} \
 $$
 其中，公式中的自由度索引 `i` 对应受约束自由度。
 该方法相比罚函数法能更好地保证节点位移的精确解，避免了数值溢出风险。
@@ -111,19 +111,19 @@ for dof, val in self.dirichlet_bcs:
 对于结构动力学运动方程：
 
 $$
-\mathbf{M}\ddot{\mathbf{u}}(t) + \mathbf{C}\dot{\mathbf{u}}(t) + \mathbf{K}\mathbf{u}(t) = \mathbf{F}(t)
+\mathbf{M}\ddot{\mathbf{u}}(t) + \mathbf{C}\dot{\mathbf{u}}(t) + \mathbf{K}\mathbf{u}(t) = \mathbf{F}(t) \
 $$
 
 系统采用经典的 **Newmark-β 隐式积分法**。阻尼矩阵 `C` 基于 Rayleigh 比例阻尼模型构建：
 
 $$
-\mathbf{C} = \alpha \mathbf{M} + \beta \mathbf{K}
+\mathbf{C} = \alpha \mathbf{M} + \beta \mathbf{K} \
 $$
 
 算法参数取（平均加速度法）：
 
 $$
-\gamma = 0.5,\quad \beta = 0.25
+\gamma = 0.5,\quad \beta = 0.25 \
 $$
 
 上述参数组合可确保线性系统的无条件稳定性。
@@ -244,13 +244,13 @@ class GTDamagePredictor(nn.Module):
 FEM 损伤指标采用如下形式：
 
 $$
-D_{\mathrm{FEM}}(t,e)=1-\frac{|\sigma_{\mathrm{damaged}}(t,e)|}{|\sigma_{\mathrm{ref}}(t,e)|+\varepsilon}
+D_{\mathrm{FEM}}(t,e)=1-\frac{|\sigma_{\mathrm{damaged}}(t,e)|}{|\sigma_{\mathrm{ref}}(t,e)|+\varepsilon} \
 $$
 
 深度学习模型输出的刚度因子记为 $\hat{\eta}(t,e)$，对应损伤指标为：
 
 $$
-D_{\mathrm{DL}}(t,e)=1-\hat{\eta}(t,e)
+D_{\mathrm{DL}}(t,e)=1-\hat{\eta}(t,e) \
 $$
 
 ### 4.3 多源对比实验数据 (Metrics Analysis)
