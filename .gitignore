@@ -1,4 +1,11 @@
 spec.md
+improvement_roadmap.md
+
+# Agent working files
+agent.md
+CLAUDE.md
+AGENTS.md
+
 # Python related
 __pycache__/
 *.pyc
@@ -11,3 +18,13 @@ postprocess_results/
 *_bak/
 Deep_learning/checkpoints/
 Deep_learning/figures/report_*/
+Condition_prediction/outputs/
+
+# IDE and editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Jupyter
+.ipynb_checkpoints/
