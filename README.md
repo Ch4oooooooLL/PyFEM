@@ -143,8 +143,8 @@ for i in range(1, self.num_steps):
 ### 2.6 有限元计算结果验证
 为了验证有限元内核的计算正确性，对 Truss-Bridge 模型进行了静力及动力载荷下的模拟：
 
-![FEM Results](docs/images/supervisor/vm_cloud_frame_100.png)
-*   **计算验证**: 上图展示了谐波载荷作用下结构在 $t=1.28s$ 时的位移与应力响应。灰色虚线表示初始平衡态，彩色云图反映了受载后的结构振动特征。计算结果与理论预测的结构弯曲趋势基本一致，验证了算法实现的正确性。
+![FEM 动力学响应动画](docs/images/condition_prediction/deformation_animation_fem.gif)
+*   **计算验证**: 上图展示了谐波载荷作用下结构的位移与应力时变响应。灰色虚线表示初始平衡态，彩色云图（Viridis 色阶：蓝→黄表示低→高）反映了受载后的 von Mises 应力分布演化。计算结果与理论预测的结构弯曲趋势基本一致，验证了算法实现的正确性。
 
 ---
 
