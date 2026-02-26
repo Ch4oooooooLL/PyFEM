@@ -276,6 +276,21 @@ D_{\mathrm{DL}}(t,e)=1-\hat{\eta}(t,e)
 ![重点单元时程对比](docs/images/condition_prediction/focus_elements_comparison_all.png)
 *   **特征单元响应追踪**: 在选定的关键特征单元上，GT 能够精准捕获损伤引起的非线性波动特征及末时刻残余损伤量；PINN 虽然能识别损伤趋势，但在幅值量化上仍显不足。
 
+#### 4.4.1 结构动力学响应动画
+
+为更直观地展示结构在指定工况下的动力学演化过程，模块支持自动生成桁架变形与应力云图的时变动画。以下为同一工况下三种计算方式的对比：
+
+![FEM变形动画](docs/images/condition_prediction/deformation_animation_fem.gif)
+*   **FEM 真值响应**: 基于真实损伤工况计算的结构变形与 von Mises 应力演化，灰色虚线表示初始平衡态，彩色云图反映应力分布。
+
+![GT模型预测动画](docs/images/condition_prediction/deformation_animation_gt.gif)
+*   **GT 模型预测**: 使用 Graph Transformer 模型推断的损伤因子重新计算得到的结构响应，与 FEM 真值对比可验证模型预测的准确性。
+
+![PINN模型预测动画](docs/images/condition_prediction/deformation_animation_pinn.gif)
+*   **PINN 模型预测**: 使用 Physics-Informed Neural Network 推断的损伤因子计算得到的结构响应，可观察其与 GT 及 FEM 结果的差异。
+
+> **动画说明**: 图中桁架变形已放大 500 倍以便于观察，色彩表示 von Mises 应力强度（Viridis 色阶：蓝→黄表示低→高），标题显示当前时刻。
+
 ### 4.5 模块阶段性总结
 对比实验表明，GT 模型在当前场景下展现出较好的稳健性：其时域预测结果与有限元计算较为接近，具有代替 FEM 进行快速动力学分析的潜力。
 
