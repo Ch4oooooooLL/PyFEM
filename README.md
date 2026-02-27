@@ -89,28 +89,22 @@ def assemble_K(self):
 
 对于受约束自由度 $i$，修改后的系统方程为：
 
-$$
-\sum_{j} \mathbf{K}_{ij}' \mathbf{u}_j = \mathbf{F}_i'
-$$
+$$\sum_{j} \mathbf{K}_{ij}' \mathbf{u}_j = \mathbf{F}_i'$$
 
 其中：
 
-$$
-\mathbf{K}_{ij}' = 
+$$\mathbf{K}_{ij}' = 
 \begin{cases}
-1 & \text{若 } i = j \text{ 且 } i \text{ 为约束自由度} \\
-0 & \text{若 } i \text{ 为约束自由度且 } j \neq i \\
+1 & i = j \text{ 且 } i \text{ 为约束自由度} \\
+0 & i \text{ 为约束自由度且 } j \neq i \\
 \mathbf{K}_{ij} & \text{否则}
-\end{cases}
-$$
+\end{cases}$$
 
-$$
-\mathbf{F}_i' = 
+$$\mathbf{F}_i' = 
 \begin{cases}
-\bar{u}_i & \text{若 } i \text{ 为约束自由度} \\
-\mathbf{F}_i - \mathbf{K}_{ij} \cdot \bar{u}_j & \text{若 } i \text{ 为非约束自由度（需减去约束带来的贡献）}
-\end{cases}
-$$
+\bar{u}_i & i \text{ 为约束自由度} \\
+\mathbf{F}_i - \mathbf{K}_{ij} \cdot \bar{u}_j & i \text{ 为非约束自由度}
+\end{cases}$$
 
 其中，$\bar{u}_i$ 为给定的位移边界值。求解该修改后的系统即可自动满足位移边界条件。
 
