@@ -89,13 +89,13 @@ def assemble_K(self):
 
 对于受约束自由度 $i$，修改后的系统方程为：
 
-$$\mathbf{K}_{ii}' = 1, \quad \mathbf{K}_{ij}' = 0 (j \neq i), \quad \mathbf{F}_i' = \bar{u}_i$$
+$$\mathbf{K}_{ii}' = 1, \quad \mathbf{K}_{ij}' = 0 (j \neq i), \quad \mathbf{F}_i' = u_i$$
 
 对于非约束自由度 $j$：
 
-$$\mathbf{F}_j' = \mathbf{F}_j - \mathbf{K}_{ji} \cdot \bar{u}_i$$
+$$\mathbf{F}_j' = \mathbf{F}_j - \mathbf{K}_{ji} \cdot u_i$$
 
-其中，$\bar{u}_i$ 为给定的位移边界值。求解该修改后的系统即可自动满足位移边界条件。
+其中，$u_i$ 为给定的位移边界值。求解该修改后的系统即可自动满足位移边界条件。
 
 该方法相比罚函数法能更好地保证节点位移的精确解，避免了数值溢出风险。
 
