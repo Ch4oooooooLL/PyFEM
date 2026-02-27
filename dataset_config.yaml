@@ -1,69 +1,72 @@
-structure_file: structure.yaml
-output_file: dataset/train.npz
+# 训练数据集生成配置文件
+# 定义结构文件路径、求解时间参数、损伤工况和载荷生成参数
 
-time:
-  dt: 0.01
-  total_time: 2.0
+structure_file: structure.yaml                        # 结构定义文件路径
+output_file: dataset/train.npz                        # 生成的训练数据集输出路径
 
-generation:
-  num_samples: 20000
-  random_seed: 42
+time:                                                 # 时间求解参数
+  dt: 0.01                                            # 时间步长 (秒)
+  total_time: 2.0                                      # 总模拟时间 (秒)
 
-damage:
-  enabled: true
-  min_damaged_elements: 1
-  max_damaged_elements: 3
-  reduction_range: [0.5, 0.9]
+generation:                                           # 数据生成参数
+  num_samples: 20000                                  # 生成样本数量
+  random_seed: 42                                      # 随机种子，确保可复现性
 
-load_generation:
-  mode: random_multi_point
+damage:                                               # 损伤工况设置
+  enabled: true                                       # 是否启用损伤模拟
+  min_damaged_elements: 1                             # 每个样本中最少损伤单元数
+  max_damaged_elements: 3                             # 每个样本中最多损伤单元数
+  reduction_range: [0.5, 0.9]                         # 刚度折减范围 (如0.7表示保留70%刚度)
+
+load_generation:                                     # 载荷生成配置
+  mode: random_multi_point                            # 载荷模式：随机多点激励
   random_multi_point:
-    num_loads_per_sample_range: [2, 5]
+    num_loads_per_sample_range: [2, 5]               # 每个样本的载荷数量范围
     candidate_nodes:
-      mode: all_non_support_nodes
-      include_nodes: []
-      exclude_nodes: []
-    dof_candidates: [fx, fy]
-    dof_weights: [0.45, 0.55]
-    pattern_candidates: [harmonic, pulse, half_sine, gaussian, ramp]
-    pattern_weights: [0.55, 0.10, 0.10, 0.10, 0.15]
-    avoid_duplicate_node_dof: true
-    parameter_ranges:
-      F0: [5000, 20000]
-      freq: [0.5, 2.4]
-      phase: [0.0, 6.283185307]
-      offset: [-22000, 5000]
-      t_start: [0.0, 1.6]
-      t_end: [0.15, 2.0]
-      t_ramp: [0.05, 0.6]
-      t0: [0.1, 1.9]
-      sigma: [0.03, 0.25]
+      mode: all_non_support_nodes                    # 候选节点模式：所有非支座节点
+      include_nodes: []                              # 额外包含的节点ID列表
+      exclude_nodes: []                              # 排除的节点ID列表
+    dof_candidates: [fx, fy]                          # 可选自由度: fx(水平力), fy(竖向力)
+    dof_weights: [0.45, 0.55]                        # 各自由度被选中的权重
+    pattern_candidates: [harmonic, pulse, half_sine, gaussian, ramp]  # 载荷时程模式
+    pattern_weights: [0.55, 0.10, 0.10, 0.10, 0.15] # 各模式被选中的权重
+    avoid_duplicate_node_dof: true                   # 避免同一节点同一自由度重复加载
+    parameter_ranges:                                # 各类载荷模式的参数范围
+      F0: [5000, 20000]                              # 幅值范围 (N)
+      freq: [0.5, 2.4]                               # 频率范围 (Hz)
+      phase: [0.0, 6.283185307]                      # 相位范围 (弧度)
+      offset: [-22000, 5000]                         # 直流偏置范围 (N)
+      t_start: [0.0, 1.6]                            # 载荷开始时间 (秒)
+      t_end: [0.15, 2.0]                             # 载荷结束时间 (秒)
+      t_ramp: [0.05, 0.6]                           # 斜坡时间 (秒)
+      t0: [0.1, 1.9]                                # 高斯脉冲中心时间 (秒)
+      sigma: [0.03, 0.25]                            # 高斯脉冲宽度 (秒)
 
-damping:
-  alpha: 0.1
-  beta: 0.01
+damping:                                              # 瑞利阻尼参数
+  alpha: 0.1                                         # 质量矩阵系数 α
+  beta: 0.01                                         # 刚度矩阵系数 β
 
-deep_learning:
-  train:
-    model: gt
-    dataset_mode: response
-    epochs: 100
-    batch_size: 32
-    lr: 0.001
-    hidden_dim: 64
-    lambda_smooth: 0.1
-    threshold: 0.95
-    seed: 42
-    deterministic: true
-    deterministic_warn_only: false
-    num_threads: 1
-    device: auto
-    amp: false
-    num_workers: 0
-    pin_memory: true
-  inference:
-    model_type: gt
-    feature_mode: response
-    checkpoint: Deep_learning/checkpoints/gt_best.pth
-    dataset_npz: dataset/train.npz
-    device: auto
+deep_learning:                                       # 深度学习训练/推理配置
+  train:                                             # 训练参数
+    model: gt                                        # 模型类型: gt (Graph Transformer) 或 pinn
+    dataset_mode: response                           # 数据集模式: response (响应) / load (载荷) / both
+    epochs: 100                                      # 训练轮数
+    batch_size: 32                                   # 批大小
+    lr: 0.001                                        # 学习率
+    hidden_dim: 64                                   # 隐藏层维度
+    lambda_smooth: 0.1                               # 平滑损失权重
+    threshold: 0.95                                  # 损伤判定阈值
+    seed: 42                                         # 训练随机种子
+    deterministic: true                               # 是否完全确定性训练
+    deterministic_warn_only: false                   # 是否仅警告而非强制确定性
+    num_threads: 1                                   # 线程数
+    device: auto                                     # 设备: auto / cuda / cpu
+    amp: false                                       # 是否使用自动混合精度
+    num_workers: 0                                   # 数据加载线程数
+    pin_memory: true                                 # 是否固定内存
+  inference:                                         # 推理参数
+    model_type: gt                                   # 推理模型类型
+    feature_mode: response                            # 特征模式
+    checkpoint: Deep_learning/checkpoints/gt_best.pth  # 模型权重路径
+    dataset_npz: dataset/train.npz                  # 数据集路径（用于获取结构信息）
+    device: auto                                     # 推理设备

@@ -87,14 +87,32 @@ def assemble_K(self):
 ### 2.4 边界条件的数值处理
 为处理本质边界条件并消除矩阵奇异性，程序实现了 **划零划一法 (Zero-One Substitution Method)**：
 
+对于受约束自由度 $i$，修改后的系统方程为：
+
 $$
-\begin{cases} \
-\mathbf{K}_{ij} = \delta_{ij} \\\ \
-\mathbf{F}_i = \bar{u}_i \
-\end{cases} \
+\sum_{j} \mathbf{K}_{ij}' \mathbf{u}_j = \mathbf{F}_i'
 $$
 
-其中，公式中的自由度索引 `i` 对应受约束自由度。
+其中：
+
+$$
+\mathbf{K}_{ij}' = 
+\begin{cases}
+1 & \text{若 } i = j \text{ 且 } i \text{ 为约束自由度} \\
+0 & \text{若 } i \text{ 为约束自由度且 } j \neq i \\
+\mathbf{K}_{ij} & \text{否则}
+\end{cases}
+$$
+
+$$
+\mathbf{F}_i' = 
+\begin{cases}
+\bar{u}_i & \text{若 } i \text{ 为约束自由度} \\
+\mathbf{F}_i - \mathbf{K}_{ij} \cdot \bar{u}_j & \text{若 } i \text{ 为非约束自由度（需减去约束带来的贡献）}
+\end{cases}
+$$
+
+其中，$\bar{u}_i$ 为给定的位移边界值。求解该修改后的系统即可自动满足位移边界条件。
 该方法相比罚函数法能更好地保证节点位移的精确解，避免了数值溢出风险。
 
 *   **实现代码** ([`./PyFEM_Dynamics/solver/boundary.py`](./PyFEM_Dynamics/solver/boundary.py)):
@@ -161,18 +179,25 @@ for i in range(1, self.num_steps):
 
 ### 3.2 图变换网络 (Graph Transformer) 架构
 考虑到工程结构天然具有图拓扑（Graph Topology）特征，模型采用了 **Graph Transformer** 网络：
-1.  **节点特征编码**: 提取传感器的加速度/位移响应特征。
-2.  **空间关系推理**: 通过注意力机制计算力学信号在物理结构中的传递关联。
+1.  **节点特征编码**: 使用 1D 卷积提取传感器位移/加速度响应的时间序列特征。
+2.  **空间关系推理**: 通过 Multi-Head Self-Attention 机制计算力学信号在物理结构中的全局传递关联。
 3.  **预测任务**: 针对每个单元预测其损伤系数（0.5-1.0）。
 
 *   **模型实现片段** ([`./Deep_learning/models/gt_model.py`](./Deep_learning/models/gt_model.py)):
 ```python
 class GTDamagePredictor(nn.Module):
     def forward(self, x, adj, edge_index):
-        # 时间特征提取与空间图交互
+        # 时间特征提取
         h_node = self.node_encoder(x_flat).squeeze(-1)
-        h_node = self.gat1(h_node, adj)
-        h_node = self.gat2(h_node, adj)
+        h_node = h_node.view(batch_size, self.num_nodes, -1)
+        
+        # 添加位置编码
+        h_node = self.pos_encoder(h_node)
+        
+        # 图变换器层进行空间信息交互
+        for layer in self.transformer_layers:
+            h_node = layer(h_node, adj)
+        
         # 提取单元端部节点特征进行拼接预测
         h_edge = torch.cat([h_node[:, edge_index[:, 0], :], h_node[:, edge_index[:, 1], :]], dim=-1)
         return self.damage_fc(h_edge).squeeze(-1)
@@ -242,9 +267,19 @@ class GTDamagePredictor(nn.Module):
 4.  调用训练好的 GT 与 PINN 模型，对同一工况进行损伤预测。
 5.  统一输出对比指标与图像结果。
 
-FEM 损伤指标采用如下形式：
+FEM 损伤指标采用如下形式（基于刚度折减定义）：
 
 $$
+D_{\mathrm{FEM}}(t,e)=1-\frac{|\sigma_{\mathrm{damaged}}(t,e)|}{|\sigma_{\mathrm{ref}}(t,e)|+\varepsilon}=1-\hat{\eta}_{\mathrm{FEM}}(t,e) \
+$$
+
+深度学习模型输出的刚度因子记为 $\hat{\eta}(t,e)$，对应损伤指标为：
+
+$$
+D_{\mathrm{DL}}(t,e)=1-\hat{\eta}(t,e) \
+$$
+
+**统一说明**：由于应力与刚度成正比（对于相同载荷条件下 $\sigma \propto 1/E$），FEM 应力比值可近似为刚度折减系数，因此两种定义在物理意义上保持一致。
 D_{\mathrm{FEM}}(t,e)=1-\frac{|\sigma_{\mathrm{damaged}}(t,e)|}{|\sigma_{\mathrm{ref}}(t,e)|+\varepsilon} \
 $$
 

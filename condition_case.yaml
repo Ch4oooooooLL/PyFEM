@@ -1,26 +1,29 @@
-structure_file: structure.yaml
+# 工况预测配置文件
+# 用于定义特定载荷工况下的结构响应预测和损伤识别任务
 
-time:
-  dt: 0.01
-  total_time: 2.0
+structure_file: structure.yaml                        # 结构定义文件路径
 
-damping:
-  alpha: 0.1
-  beta: 0.01
+time:                                                 # 时间求解参数
+  dt: 0.01                                            # 时间步长 (秒)
+  total_time: 2.0                                      # 总模拟时间 (秒)
 
-load_case:
-  loads:
+damping:                                              # 瑞利阻尼参数
+  alpha: 0.1                                         # 质量矩阵系数 α
+  beta: 0.01                                         # 刚度矩阵系数 β
+
+load_case:                                            # 载荷工况定义
+  loads:                                             # 载荷列表
+    - node_id: 3                                      # 载荷作用节点ID
+      dof: fx                                        # 自由度: fx(水平力)
+      pattern: harmonic                               # 载荷时程模式
+      F0: 10000.0                                     # 幅值 (N)
+      freq: 1.20                                      # 频率 (Hz)
+      phase: 0.0                                      # 相位 (弧度)
+      offset: 0.0                                     # 直流偏置 (N)
+      duration: 2.0                                    # 持续时间 (秒)
+
     - node_id: 3
-      dof: fx
-      pattern: harmonic
-      F0: 10000.0
-      freq: 1.20
-      phase: 0.0
-      offset: 0.0
-      duration: 2.0
-
-    - node_id: 3
-      dof: fy
+      dof: fy                                        # 自由度: fy(竖向力)
       pattern: harmonic
       F0: 15000.0
       freq: 0.95
@@ -37,23 +40,23 @@ load_case:
       offset: -10000.0
       duration: 2.0
 
-damage_case:
-  damaged_elements:
-    - element_id: 7
-      factor: 0.75
+damage_case:                                          # 损伤工况定义
+  damaged_elements:                                   # 损伤单元列表
+    - element_id: 7                                   # 损伤单元ID
+      factor: 0.75                                    # 刚度折减系数 (1.0 = 无损伤, <1.0 = 损伤)
     - element_id: 8
       factor: 0.80
 
-deep_learning:
+deep_learning:                                       # 深度学习推理配置
   inference:
-    model_type: gt
-    feature_mode: response
-    checkpoint: Deep_learning/checkpoints/gt_best.pth
-    dataset_npz: dataset/train.npz
-    device: auto
-    threshold: 0.95
+    model_type: gt                                   # 模型类型: gt (Graph Transformer) 或 pinn
+    feature_mode: response                          # 特征模式: response (位移响应) / load (载荷) / both
+    checkpoint: Deep_learning/checkpoints/gt_best.pth  # 模型权重路径
+    dataset_npz: dataset/train.npz                  # 数据集路径
+    device: auto                                     # 推理设备: auto / cuda / cpu
+    threshold: 0.95                                  # 损伤判定阈值
 
-output:
-  root_dir: Condition_prediction/outputs
-  case_name: condition_case_a
-  focus_elements: [7, 8, 6, 9]
+output:                                              # 输出配置
+  root_dir: Condition_prediction/outputs             # 输出根目录
+  case_name: condition_case_a                        # 工况名称（用于输出文件夹命名）
+  focus_elements: [7, 8, 6, 9]                       # 重点关注单元ID（用于可视化对比）

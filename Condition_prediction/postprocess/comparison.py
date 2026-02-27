@@ -15,8 +15,16 @@ def compute_fem_damage_index_history(
 ) -> np.ndarray:
     """
     Convert stress history into a time-varying damage index.
+    
+    统一损伤指标定义：基于刚度折减的损伤指标
+    由于应力与刚度成正比 (σ ∝ E^{-1} 对于相同载荷),
+    应力比值可近似为刚度折减系数，即：
+    damage_index = 1 - η ≈ 1 - |σ_damaged| / |σ_ref|
+    
+    此定义与深度学习模型输出的刚度因子 (damage_factor = η) 保持一致：
+    - damage_index = 1 - η
+    - 预测的损伤因子 η 对应结构刚度的保留比例
 
-    damage_index = 1 - |sigma_damaged| / (|sigma_reference| + eps), clipped to [0, 1]
     shape: (num_steps, num_elements)
     """
     if stress_damaged.shape != stress_reference.shape:

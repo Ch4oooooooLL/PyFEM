@@ -1,29 +1,32 @@
+# 载荷模式模板定义
+# 定义各种时程载荷模式的数学表达式和参数列表
+
 load_patterns:
   pulse:
-    description: "Rectangular pulse load"
+    description: "矩形脉冲载荷"                    # 矩形波形式的恒定载荷
     formula: "F(t) = F0, for t_start <= t < t_end"
-    params: [F0, t_start, t_end]
+    params: [F0, t_start, t_end]                   # 参数: 幅值, 开始时间, 结束时间
     
   harmonic:
-    description: "Sinusoidal harmonic load"
+    description: "正弦谐波载荷"                     # 简谐振动载荷
     formula: "F(t) = F0 * sin(2*pi*f*t)"
-    params: [F0, freq]
+    params: [F0, freq]                              # 参数: 幅值, 频率
     
   half_sine:
-    description: "Half-sine pulse"
+    description: "半正弦脉冲"                       # 单周期正弦脉冲
     formula: "F(t) = F0 * sin(pi*(t-t_start)/(t_end-t_start)), for t_start <= t < t_end"
-    params: [F0, t_start, t_end]
+    params: [F0, t_start, t_end]                   # 参数: 幅值, 开始时间, 结束时间
     
   ramp:
-    description: "Linear ramp load"
+    description: "线性斜坡载荷"                     # 从零线性增长的载荷
     formula: "F(t) = F0 * (t - t_start) / t_ramp, for t_start <= t < t_start + t_ramp"
-    params: [F0, t_start, t_ramp]
+    params: [F0, t_start, t_ramp]                  # 参数: 幅值, 开始时间, 斜坡时间
     
   gaussian:
-    description: "Gaussian impact pulse"
+    description: "高斯冲击脉冲"                     # 钟形冲击载荷
     formula: "F(t) = F0 * exp(-0.5*((t-t0)/sigma)^2)"
-    params: [F0, t0, sigma]
+    params: [F0, t0, sigma]                        # 参数: 幅值, 中心时间, 脉冲宽度
 
-dof_mapping:
-  ux: 0
-  uy: 1
+dof_mapping:                                         # 自由度编号映射
+  ux: 0                                             # 水平位移/力对应索引0
+  uy: 1                                             # 竖向位移/力对应索引1

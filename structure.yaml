@@ -1,19 +1,22 @@
+# 结构几何与材料配置文件
+# 用于定义桁架/梁结构的节点坐标、单元连接、材料属性和边界条件
+
 metadata:
-  description: "3-Triangle Truss Bridge Structure"
-  num_nodes: 7
-  num_elements: 11
-  num_dofs: 14
-  dofs_per_node: 2
+  description: "3-Triangle Truss Bridge Structure"  # 结构描述
+  num_nodes: 7                                       # 节点数量
+  num_elements: 11                                  # 单元数量
+  num_dofs: 14                                      # 总自由度数量
+  dofs_per_node: 2                                  # 每个节点的自由度数量 (ux, uy)
 
-materials:
-  - name: "steel"
-    E: 2.0e+11
-    rho: 7850.0
-    nu: 0.3
+materials:  # 材料定义
+  - name: "steel"                                    # 材料名称
+    E: 2.0e+11                                       # 弹性模量 (Pa)
+    rho: 7850.0                                      # 密度 (kg/m³)
+    nu: 0.3                                          # 泊松比
 
-nodes:
+nodes:  # 节点坐标定义
   - id: 0
-    coords: [0.0, 0.0]
+    coords: [0.0, 0.0]                              # 节点坐标 [x, y]
   - id: 1
     coords: [1.0, 1.5]
   - id: 2
@@ -27,12 +30,12 @@ nodes:
   - id: 6
     coords: [6.0, 0.0]
 
-elements:
+elements:  # 单元定义 (桁架单元)
   - id: 0
-    nodes: [0, 2]
-    material: "steel"
-    A: 0.005
-    I: 0.0
+    nodes: [0, 2]                                   # 单元连接的两个节点 [node1, node2]
+    material: "steel"                                # 所用材料名称
+    A: 0.005                                         # 截面积 (m²)
+    I: 0.0                                           # 惯性矩 (用于梁单元，桁架为0)
   - id: 1
     nodes: [2, 4]
     material: "steel"
@@ -84,8 +87,8 @@ elements:
     A: 0.005
     I: 0.0
 
-boundary:
-  - node_id: 0
-    constraints: [ux, uy]
+boundary:  # 边界条件定义 (本质边界条件)
+  - node_id: 0                                       # 约束节点ID
+    constraints: [ux, uy]                            # 约束的自由度: ux(水平位移), uy(竖向位移)
   - node_id: 6
-    constraints: [uy]
+    constraints: [uy]                                # 仅约束竖向位移
