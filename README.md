@@ -113,6 +113,7 @@ $$
 $$
 
 其中，$\bar{u}_i$ 为给定的位移边界值。求解该修改后的系统即可自动满足位移边界条件。
+
 该方法相比罚函数法能更好地保证节点位移的精确解，避免了数值溢出风险。
 
 *   **实现代码** ([`./PyFEM_Dynamics/solver/boundary.py`](./PyFEM_Dynamics/solver/boundary.py)):
