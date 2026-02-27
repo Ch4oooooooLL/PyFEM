@@ -18,10 +18,11 @@
 *   **节点构造片段** ([`./PyFEM_Dynamics/core/node.py`](./PyFEM_Dynamics/core/node.py)):
 ```python
 class Node:
-    def __init__(self, node_id, x, y):
-        self.node_id = node_id
-        self.x, self.y = x, y
-        self.dofs = [] # 存储该节点分配到的全局自由度编号
+    def __init__(self, node_id: int, x: float, y: float):
+        self.node_id: int = node_id
+        self.x: float = x
+        self.y: float = y
+        self.dofs: List[int] = [] # 存储该节点分配到的全局自由度编号
 ```
 
 *   **相关文件**: 
@@ -36,16 +37,20 @@ class Node:
 $$
 \mathbf{k}^e = \frac{EA}{L} \
 \begin{bmatrix} \
-1 & -1 \\ \
--1 & 1 \
+1 & 0 & -1 & 0 \\ \
+0 & 0 & 0 & 0 \\ \
+-1 & 0 & 1 & 0 \\ \
+0 & 0 & 0 & 0 \
 \end{bmatrix} \
 $$
 
 $$
 \mathbf{m}^e = \frac{\rho A L}{6} \
 \begin{bmatrix} \
-2 & 1 \\ \
-1 & 2 \
+2 & 0 & 1 & 0 \\ \
+0 & 2 & 0 & 1 \\ \
+1 & 0 & 2 & 0 \\ \
+0 & 1 & 0 & 2 \
 \end{bmatrix} \
 $$
 
@@ -68,8 +73,10 @@ def get_local_stiffness(self):
 $$
 \mathbf{m}_{\mathrm{lumped}}^e = \frac{\rho A L}{2} \
 \begin{bmatrix} \
-1 & 0 \\ \
-0 & 1 \
+1 & 0 & 0 & 0 \\ \
+0 & 1 & 0 & 0 \\ \
+0 & 0 & 1 & 0 \\ \
+0 & 0 & 0 & 1 \
 \end{bmatrix} \
 $$
 
@@ -101,7 +108,7 @@ $$\mathbf{F}_j' = \mathbf{F}_j - \mathbf{K}_{ji} \cdot u_i$$
 
 *   **实现代码** ([`./PyFEM_Dynamics/solver/boundary.py`](./PyFEM_Dynamics/solver/boundary.py)):
 ```python
-# 边界处理核心片段
+# 边界处理核心片段 (简化版本)
 for dof in bc_dofs:
     K_csc.data[K_csc.indptr[dof]:K_csc.indptr[dof+1]] = 0.0 # 列划零
 for dof, val in self.dirichlet_bcs:
@@ -133,14 +140,39 @@ $$
 
 *   **核心求解逻辑** ([`./PyFEM_Dynamics/solver/integrator.py`](./PyFEM_Dynamics/solver/integrator.py)):
 ```python
+# Newmark 积分常数
+a0 = 1.0 / (self.beta * self.dt**2)
+a1 = self.gamma / (self.beta * self.dt)
+a2 = 1.0 / (self.beta * self.dt)
+a3 = 1.0 / (2.0 * self.beta) - 1.0
+a4 = self.gamma / self.beta - 1.0
+a5 = (self.dt / 2.0) * (self.gamma / self.beta - 2.0)
+a6 = self.dt * (1.0 - self.gamma)
+a7 = self.gamma * self.dt
+
 # 时间步迭代循环
 for i in range(1, self.num_steps):
+    u_prev = U[:, i-1]
+    v_prev = V[:, i-1]
+    a_prev = A[:, i-1]
+    
+    # 计算等效荷载块:
     # F_hat_i = F_i + M*(a0*u_prev + a2*v_prev + a3*a_prev) + C*(a1*u_prev + a4*v_prev + a5*a_prev)
+    term_M = a0 * u_prev + a2 * v_prev + a3 * a_prev
+    term_C = a1 * u_prev + a4 * v_prev + a5 * a_prev
+    
     F_hat = F_t[:, i] + self.M.dot(term_M) + self.C.dot(term_C)
+    
+    # 求解 U_i
     u_next = K_hat_lu.solve(F_hat)
-    # 更新加速度与速度
+    
+    # 更新加速度和速度
     a_next = a0 * (u_next - u_prev) - a2 * v_prev - a3 * a_prev
     v_next = v_prev + a6 * a_prev + a7 * a_next
+    
+    U[:, i] = u_next
+    V[:, i] = v_next
+    A[:, i] = a_next
 ```
 
 ### 2.6 有限元计算结果验证
@@ -165,12 +197,18 @@ for i in range(1, self.num_steps):
 考虑到工程结构天然具有图拓扑（Graph Topology）特征，模型采用了 **Graph Transformer** 网络：
 1.  **节点特征编码**: 使用 1D 卷积提取传感器位移/加速度响应的时间序列特征。
 2.  **空间关系推理**: 通过 Multi-Head Self-Attention 机制计算力学信号在物理结构中的全局传递关联。
-3.  **预测任务**: 针对每个单元预测其损伤系数（0.5-1.0）。
+3.  **预测任务**: 针对每个单元预测其损伤系数（0.5-0.9，具体范围由配置文件中的reduction_range决定）。
 
 *   **模型实现片段** ([`./Deep_learning/models/gt_model.py`](./Deep_learning/models/gt_model.py)):
 ```python
 class GTDamagePredictor(nn.Module):
     def forward(self, x, adj, edge_index):
+        batch_size = x.size(0)
+        
+        # 重塑输入张量以适配节点结构
+        x_nodes = x.view(batch_size, -1, self.num_nodes, self.node_in_dim).transpose(1, 2)
+        x_flat = x_nodes.reshape(batch_size * self.num_nodes, -1, self.node_in_dim).transpose(1, 2)
+        
         # 时间特征提取
         h_node = self.node_encoder(x_flat).squeeze(-1)
         h_node = h_node.view(batch_size, self.num_nodes, -1)
@@ -183,7 +221,13 @@ class GTDamagePredictor(nn.Module):
             h_node = layer(h_node, adj)
         
         # 提取单元端部节点特征进行拼接预测
-        h_edge = torch.cat([h_node[:, edge_index[:, 0], :], h_node[:, edge_index[:, 1], :]], dim=-1)
+        node1_idx = edge_index[:, 0]
+        node2_idx = edge_index[:, 1]
+        
+        h_node1 = h_node[:, node1_idx, :]
+        h_node2 = h_node[:, node2_idx, :]
+        
+        h_edge = torch.cat([h_node1, h_node2], dim=-1)
         return self.damage_fc(h_edge).squeeze(-1)
 ```
 
@@ -196,7 +240,7 @@ class GTDamagePredictor(nn.Module):
 ![GT 训练历史](docs/images/dl_results/gt_history.png)
 **Graph Transformer (GT) 训练演进分析：**
 1.  **损耗收敛趋势**：训练损耗（Train Loss）与验证损耗（Val Loss）在初始阶段呈指数级下降后进入平稳期。Best Val 状态出现于第 100 Epoch，表明参数优化过程在全周期内保持活跃。
-2.  **泛化性能评估**：验证损耗持续低于训练损耗，这归因于训练阶段激活的正则化机制（如 Dropout、DropEdge）提升了模型对未见数据的泛化能力。
+2.  **泛化性能评估**：验证损耗持续低于训练损耗，这归因于训练阶段激活的正则化机制（如 Dropout）提升了模型对未见数据的泛化能力。
 3.  **预测精度与召回**：MAE 指标在 20 Epoch 后稳定于 0.084-0.089 范围；F1 Score 迅速攀升并保持在 0.30 左右，证明模型能高效捕捉物理特征。
 4.  **累计性能增益**：相对提升曲线呈现稳定的准线性增长，截止第 100 Epoch，模型验证性能较初始阶段累计提升约 4.5%。
 
@@ -204,7 +248,7 @@ class GTDamagePredictor(nn.Module):
 ![PINN 训练历史](docs/images/dl_results/pinn_history.png)
 **PINN 训练演进分析：**
 1.  **收敛稳定性评估**：虽然损耗曲线维持下行趋势，但绝对下降量级极小（从 0.5616 降至 0.5600 附近），说明模型权重更新陷入平缓的局部最优区间。
-2.  **约束冲突分析**：验证损耗高于训练损耗的现象主要源于训练目标中引入了复杂的偏微分方程（PDE）残差惩罚项，增加了优化难度。
+2.  **约束冲突分析**：验证损耗高于训练损耗的现象主要源于训练目标中同时包含数据项、分类项以及平滑/范围等物理约束项，增加了优化难度。
 3.  **指标波动分析**：MAE 在极窄范围内震荡（0.470-0.472），反映出模型内部权重未发生实质性重构；F1 曲线的平直特征揭示了该分类指标在纯回归物理场预测任务中的不适用性。
 4.  **累计提升评估**：尽管相对提升曲线展示增长特征，但 100 Epoch 后的累计提升仅为 0.28%，实际预测性能已趋于饱和。
 
@@ -248,7 +292,7 @@ class GTDamagePredictor(nn.Module):
 1.  读取工况，构造确定性载荷时程矩阵。
 2.  分别计算**健康结构**与**损伤结构**的 FEM 动力学响应。
 3.  基于应力时程构造 FEM 损伤指标。
-4.  调用训练好的 GT 与 PINN 模型，对同一工况进行损伤预测。
+4.  按配置调用指定的深度学习模型（`gt` 或 `pinn`）进行损伤预测；若检测到另一模型权重，可附加生成动画对比。
 5.  统一输出对比指标与图像结果。
 
 FEM 损伤指标采用如下形式（基于刚度折减定义）：
@@ -263,15 +307,7 @@ $$
 D_{\mathrm{DL}}(t,e)=1-\hat{\eta}(t,e) \
 $$
 
-**统一说明**：由于应力与刚度成正比（对于相同载荷条件下 $\sigma \propto 1/E$），FEM 应力比值可近似为刚度折减系数，因此两种定义在物理意义上保持一致。
-D_{\mathrm{FEM}}(t,e)=1-\frac{|\sigma_{\mathrm{damaged}}(t,e)|}{|\sigma_{\mathrm{ref}}(t,e)|+\varepsilon} \
-$$
-
-深度学习模型输出的刚度因子记为 $\hat{\eta}(t,e)$，对应损伤指标为：
-
-$$
-D_{\mathrm{DL}}(t,e)=1-\hat{\eta}(t,e) \
-$$
+**统一说明**：在同一载荷条件下可按当前实现采用应力比近似刚度折减系数（$\hat{\eta}_{\mathrm{FEM}} \approx |\sigma_{\mathrm{damaged}}|/(|\sigma_{\mathrm{ref}}|+\varepsilon)$），从而与深度学习侧的 $D_{\mathrm{DL}}=1-\hat{\eta}$ 定义对齐。
 
 ### 4.3 多源对比实验数据 (Metrics Analysis)
 
