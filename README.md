@@ -6,6 +6,34 @@
 *   **深度学习识别模块** ([`./Deep_learning`](./Deep_learning)) —— 采用图变换网络学习结构拓扑特征，实现对结构损伤状态的反向识别。
 *   **工况预测与多源对比模块** ([`./Condition_prediction`](./Condition_prediction)) —— 集成仿真与推理管线，支持在特定工况下对多源计算结果进行对比分析。
 
+## 目录结构
+
+```
+.
+├── PyFEM_Dynamics/          # FEM 计算内核
+│   ├── core/                # 核心类（节点、单元、材料）
+│   ├── solver/              # 求解器（组装、边界、积分）
+│   └── pipeline/            # 数据生成管线
+├── Deep_learning/           # 深度学习模块
+│   ├── models/              # GT 和 PINN 模型
+│   └── train.py             # 训练脚本
+├── Condition_prediction/    # 工况预测模块
+│   ├── pipelines/           # 预测管线
+│   └── scripts/             # 入口脚本
+├── notebooks/               # Jupyter Notebook 分析脚本
+│   ├── 01_structure_explorer.ipynb      # 结构可视化
+│   ├── 02_dataset_overview.ipynb        # 数据集概览
+│   ├── 03_fem_simulation.ipynb          # FEM 仿真分析
+│   ├── 04_model_training_history.ipynb  # 训练历史可视化
+│   ├── 05_damage_prediction.ipynb       # 损伤预测分析
+│   ├── 06_model_comparison.ipynb        # 模型对比
+│   ├── 07_stress_analysis.ipynb         # 应力分析
+│   └── 08_interactive_dashboard.ipynb   # 交互式仪表板
+├── structure.yaml           # 结构配置文件
+├── dataset_config.yaml      # 数据集生成配置
+└── condition_case.yaml      # 工况预测配置
+```
+
 ---
 
 ## 2. 第一部分：有限元计算内核实现
@@ -110,10 +138,10 @@ $$\mathbf{F}_j' = \mathbf{F}_j - \mathbf{K}_{ji} \cdot u_i$$
 ```python
 # 边界处理核心片段 (简化版本)
 for dof in bc_dofs:
-    K_csc.data[K_csc.indptr[dof]:K_csc.indptr[dof+1]] = 0.0 # 列划零
+    K_csc.data[K_csc.indptr[dof]:K_csc.indptr[dof+1]] = 0.0  # 列清零
 for dof, val in self.dirichlet_bcs:
-    K_lil.rows[dof] = [dof] # 行划点
-    K_lil.data[dof] = [1.0] # 对角线置1
+    K_lil.rows[dof] = [dof]      # 行保留对角元
+    K_lil.data[dof] = [1.0]      # 对角线置1
     F_mod[dof] = val
 ```
 
@@ -179,6 +207,7 @@ for i in range(1, self.num_steps):
 为了验证有限元内核的计算正确性，对 Truss-Bridge 模型进行了静力及动力载荷下的模拟：
 
 ![FEM 动力学响应动画](docs/images/condition_prediction/fem_demo_animation.gif)
+
 *   **计算验证**: 上图展示了 FEM 模块对随机多点激励载荷下的结构动力学响应模拟。灰色虚线表示初始平衡态，彩色云图（Viridis 色阶：蓝→黄表示低→高）反映了受载后的 von Mises 应力分布时变演化。计算结果与理论预测的结构弯曲趋势一致，验证了 FEM 内核实现的正确性。
 
 ---
@@ -197,7 +226,7 @@ for i in range(1, self.num_steps):
 考虑到工程结构天然具有图拓扑（Graph Topology）特征，模型采用了 **Graph Transformer** 网络：
 1.  **节点特征编码**: 使用 1D 卷积提取传感器位移/加速度响应的时间序列特征。
 2.  **空间关系推理**: 通过 Multi-Head Self-Attention 机制计算力学信号在物理结构中的全局传递关联。
-3.  **预测任务**: 针对每个单元预测其损伤系数（0.5-0.9，具体范围由配置文件中的reduction_range决定）。
+3.  **预测任务**: 针对每个单元预测其刚度折减系数（stiffness reduction factor，取值范围 0.5-0.9，具体由配置文件中的 reduction_range 决定）。
 
 *   **模型实现片段** ([`./Deep_learning/models/gt_model.py`](./Deep_learning/models/gt_model.py)):
 ```python
@@ -239,24 +268,26 @@ class GTDamagePredictor(nn.Module):
 
 ![GT 训练历史](docs/images/dl_results/gt_history.png)
 **Graph Transformer (GT) 训练演进分析：**
-1.  **损耗收敛趋势**：训练损耗（Train Loss）与验证损耗（Val Loss）在初始阶段呈指数级下降后进入平稳期。Best Val 状态出现于第 100 Epoch，表明参数优化过程在全周期内保持活跃。
-2.  **泛化性能评估**：验证损耗持续低于训练损耗，这归因于训练阶段激活的正则化机制（如 Dropout）提升了模型对未见数据的泛化能力。
-3.  **预测精度与召回**：MAE 指标在 20 Epoch 后稳定于 0.084-0.089 范围；F1 Score 迅速攀升并保持在 0.30 左右，证明模型能高效捕捉物理特征。
+1.  **损失收敛趋势**：训练损失（Train Loss）与验证损失（Val Loss）在初始阶段呈指数级下降后进入平稳期。Best Val 状态出现于第 100 Epoch，表明参数优化过程在全周期内保持活跃。
+2.  **泛化性能评估**：验证损失持续低于训练损失，这归因于训练阶段激活的正则化机制（如 Dropout）提升了模型对未见数据的泛化能力。
+3.  **预测精度与召回**：MAE 指标在 20 Epoch 后稳定于 0.084-0.089 范围；F1 Score 迅速攀升并保持在 0.30 左右。尽管 F1 Score 绝对值不高，但考虑到损伤识别的固有困难性（正负样本极度不平衡），该指标表明模型已学习到有效的损伤定位特征。
 4.  **累计性能增益**：相对提升曲线呈现稳定的准线性增长，截止第 100 Epoch，模型验证性能较初始阶段累计提升约 4.5%。
 
 
 ![PINN 训练历史](docs/images/dl_results/pinn_history.png)
 **PINN 训练演进分析：**
-1.  **收敛稳定性评估**：虽然损耗曲线维持下行趋势，但绝对下降量级极小（从 0.5616 降至 0.5600 附近），说明模型权重更新陷入平缓的局部最优区间。
-2.  **约束冲突分析**：验证损耗高于训练损耗的现象主要源于训练目标中同时包含数据项、分类项以及平滑/范围等物理约束项，增加了优化难度。
+1.  **收敛稳定性评估**：虽然损失曲线维持下行趋势，但绝对下降量级极小（从 0.5616 降至 0.5600 附近），说明模型权重更新陷入平缓的局部最优区间。
+2.  **约束冲突分析**：验证损失高于训练损失的现象主要源于训练目标中同时包含数据项、分类项以及平滑/范围等物理约束项，增加了优化难度。
 3.  **指标波动分析**：MAE 在极窄范围内震荡（0.470-0.472），反映出模型内部权重未发生实质性重构；F1 曲线的平直特征揭示了该分类指标在纯回归物理场预测任务中的不适用性。
 4.  **累计提升评估**：尽管相对提升曲线展示增长特征，但 100 Epoch 后的累计提升仅为 0.28%，实际预测性能已趋于饱和。
 
 
 ![预测对比](docs/images/dl_results/prediction_comparison.png)
+
 *   **样本级预测对比分析**: 逐样本对比结果显示，GT 模型在损伤幅值拟合上更接近真实分布；相比之下，PINN 对损伤位置具备定位倾向，但幅值预测偏差仍存在纠偏空间。
 
 ![校准曲线](docs/images/dl_results/calibration_curve.png)
+
 *   **预测一致性校准曲线**: 该图反映了预测损伤概率与真实损伤频率的相关性。GT 曲线高度贴合对角基准线，证明其预测输出具备较高的可解释性与力学可靠性。
 
 ### 3.4 阶段性评价与后续改进
@@ -307,7 +338,7 @@ $$
 D_{\mathrm{DL}}(t,e)=1-\hat{\eta}(t,e) \
 $$
 
-**统一说明**：在同一载荷条件下可按当前实现采用应力比近似刚度折减系数（$\hat{\eta}_{\mathrm{FEM}} \approx |\sigma_{\mathrm{damaged}}|/(|\sigma_{\mathrm{ref}}|+\varepsilon)$），从而与深度学习侧的 $D_{\mathrm{DL}}=1-\hat{\eta}$ 定义对齐。
+**统一说明**：在同一载荷条件下，本实现采用应力比近似刚度折减系数（$\hat{\eta}_{\mathrm{FEM}} \approx |\sigma_{\mathrm{damaged}}|/(|\sigma_{\mathrm{ref}}|+\varepsilon)$）。这是一种工程近似，假设结构处于线弹性小变形状态，从而将深度学习侧预测的刚度因子 $\hat{\eta}$ 与 FEM 计算的应力比建立对应关系。
 
 ### 4.3 多源对比实验数据 (Metrics Analysis)
 
