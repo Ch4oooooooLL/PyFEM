@@ -1,0 +1,26 @@
+[run]
+source = 
+    PyFEM_Dynamics
+    Deep_learning
+
+omit = 
+    */tests/*
+    */test_*
+    */__init__.py
+    */venv/*
+    */env/*
+
+[report]
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    raise AssertionError
+    raise NotImplementedError
+    if __name__ == .__main__.:
+    if TYPE_CHECKING:
+
+show_missing = True
+skip_covered = False
+
+# Coverage targets (incremental - start lower, increase as coverage improves)
+fail_under = 30
