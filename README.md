@@ -383,5 +383,195 @@ $$
 
 ---
 
-## 5. 小结
+## 5. 快速开始指南
+
+本节介绍如何从零开始运行项目的完整流程，包括环境配置、数据生成、模型训练和工况预测。
+
+### 5.1 环境配置
+
+```bash
+# 激活conda环境
+conda activate FEM
+
+# 安装依赖
+pip install -r requirements.txt
+pip install -r Deep_learning/requirements.txt
+```
+
+### 5.2 前置测试
+
+在开始训练前，建议运行测试套件验证环境配置：
+
+```bash
+# 运行全部测试
+pytest tests/ -v
+
+# 仅运行FEM核心测试
+pytest tests/test_fem_core/ -v
+
+# 仅运行模型测试
+pytest tests/test_models/ -v
+
+# 运行并行数据生成测试
+pytest tests/test_pipeline/test_parallel_data_gen.py -v
+```
+
+预期输出：所有测试通过（`74 passed`）。
+
+### 5.3 数据生成
+
+训练模型需要先生成数据集。配置文件`dataset_config.yaml`定义了生成参数：
+
+```bash
+# 进入数据生成目录
+cd PyFEM_Dynamics/pipeline
+
+# 并行生成数据集（默认，推荐）
+python data_gen.py --config ../../dataset_config.yaml --jobs 4
+
+# 串行生成（调试用）
+python data_gen.py --config ../../dataset_config.yaml --seq
+
+# 查看帮助
+python data_gen.py --help
+```
+
+**参数说明：**
+- `--config, -c`: 配置文件路径（默认：`dataset_config.yaml`）
+- `--jobs, -j`: 并行worker数量，`-1`为自动（cpu_count - 1）
+- `--seq`: 启用串行模式（禁用并行）
+
+**生成时间：** 并行模式下，20,000样本约需10分钟（4核），串行模式约30分钟。
+
+**输出文件：**
+- `dataset/train.npz`: 训练数据集
+- `dataset/metadata.json`: 元数据
+
+### 5.4 模型训练
+
+数据生成完成后，开始训练深度学习模型：
+
+```bash
+# 进入训练目录
+cd Deep_learning
+
+# 训练GT模型（推荐）
+python train.py --config ../dataset_config.yaml --model gt --epochs 100
+
+# 训练PINN模型
+python train.py --config ../dataset_config.yaml --model pinn --epochs 100
+
+# 同时训练GT和PINN模型
+python train.py --config ../dataset_config.yaml --model both --epochs 100
+
+# 仅评估已有模型
+python train.py --config ../dataset_config.yaml --model gt --eval_only
+```
+
+**主要参数：**
+| 参数 | 说明 | 默认值 |
+|------|------|--------|
+| `--config` | 配置文件路径 | `../dataset_config.yaml` |
+| `--model` | 模型类型：`gt`/`pinn`/`both` | 必填 |
+| `--epochs` | 训练轮数 | 从配置文件读取 |
+| `--batch_size` | 批大小 | 从配置文件读取 |
+| `--lr` | 学习率 | 从配置文件读取 |
+| `--eval_only` | 仅评估，不训练 | False |
+| `--deterministic` | 确定性训练（用于复现） | True |
+
+**训练输出：**
+- `Deep_learning/checkpoints/gt_best.pth`: GT模型最佳权重
+- `Deep_learning/checkpoints/pinn_best.pth`: PINN模型最佳权重
+- `runs/`: TensorBoard日志目录
+
+**监控训练：**
+```bash
+# 启动TensorBoard
+tensorboard --logdir runs/
+
+# 浏览器访问 http://localhost:6006
+```
+
+### 5.5 工况预测
+
+训练完成后，使用模型进行工况预测：
+
+```bash
+# 编辑工况配置
+# 修改 condition_case.yaml 中的载荷工况、损伤工况和模型路径
+
+# 运行工况预测
+cd Condition_prediction/scripts
+python run_condition_prediction_cli.py --config ../../condition_case.yaml
+
+# 指定输出目录
+python run_condition_prediction_cli.py --config ../../condition_case.yaml --output-dir ./my_output
+```
+
+**配置文件`condition_case.yaml`关键项：**
+```yaml
+# 载荷工况
+load_case:
+  loads:
+    - node_id: 3
+      dof: fx
+      pattern: harmonic
+      F0: 10000.0
+      freq: 1.20
+
+# 损伤工况（真值）
+damage_case:
+  damaged_elements:
+    - element_id: 7
+      factor: 0.75
+
+# 模型推理配置
+deep_learning:
+  inference:
+    model_type: gt                              # 使用GT模型
+    checkpoint: Deep_learning/checkpoints/gt_best.pth
+    threshold: 0.95
+```
+
+**预测输出：**
+```
+Condition_prediction/outputs/condition_case_a/
+├── comparison_metrics.json            # 量化对比指标
+├── mean_damage_comparison_all.png     # 损伤均值演化对比
+├── error_evolution_all.png            # 误差演化对比
+├── focus_elements_comparison_all.png  # 重点单元对比
+├── deformation_animation_fem.gif       # FEM变形动画
+├── deformation_animation_gt.gif        # GT预测变形动画
+└── deformation_animation_pinn.gif      # PINN预测变形动画
+```
+
+### 5.6 完整流程示例
+
+```bash
+# 1. 环境准备
+conda activate FEM
+pip install -r requirements.txt
+
+# 2. 运行测试
+pytest tests/ -v
+
+# 3. 生成数据集（约10分钟）
+cd PyFEM_Dynamics/pipeline
+python data_gen.py --jobs 4
+
+# 4. 训练GT模型（约30分钟）
+cd ../../Deep_learning
+python train.py --model gt --epochs 100
+
+# 5. 工况预测
+cd ../Condition_prediction/scripts
+python run_condition_prediction_cli.py
+
+# 6. 查看结果
+ls ../outputs/condition_case_a/
+```
+
+---
+
+## 6. 小结
 本项目完成了从底层有限元算法编程到深度学习应用的闭环学习流程。通过将力学理论（如 Newmark 积分、单元阵列推导）与代码实现直接对照，系统地实践了数值仿真与数据驱动识别的基础方法论。

@@ -1,0 +1,40 @@
+# PINN V2 Configuration
+train:
+  epochs: 50
+  batch_size: 32
+  lr: 0.001
+  weight_decay: 0.00001
+  patience: 30
+  
+  # Adaptive loss settings
+  adaptive_weights: true
+  loss_type: "gradnorm"  # Options: "gradnorm", "uncertainty"
+  
+  # Initial weights
+  initial_data_weight: 1.0
+  initial_physics_weight: 0.1
+  
+  # GradNorm parameters
+  temperature: 0.1
+  alpha: 1.5
+  
+  # Model architecture
+  hidden_dims: [256, 256, 128]
+  num_residual_blocks: 2
+  dropout: 0.3
+  
+  # Physics constraints
+  use_physics: true
+  
+# Evaluation settings
+eval:
+  threshold: 0.95
+  batch_size: 32
+
+# Grid search parameters (for --grid_search)
+grid_search:
+  initial_data_weight: [1.0, 2.0]
+  initial_physics_weight: [0.05, 0.1, 0.2]
+  temperature: [0.05, 0.1, 0.2]
+  alpha: [1.0, 1.5, 2.0]
+  lr: [0.001, 0.0005]
