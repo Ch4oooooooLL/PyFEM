@@ -138,11 +138,6 @@ class PINNDamagePredictorV2(nn.Module):
         # Sigmoid activation for damage output
         self.sigmoid = nn.Sigmoid()
         
-        # Structure info (set externally)
-        self.element_adjacency = None
-        self.stiffness_importance = None
-        self.element_coords = None
-        
     def set_structure_info(
         self,
         element_adjacency: Optional[np.ndarray] = None,
@@ -158,18 +153,24 @@ class PINNDamagePredictorV2(nn.Module):
             element_coords: Element coordinates for spatial constraints (num_elem, 2)
         """
         if element_adjacency is not None:
+            if 'element_adjacency' in self._buffers:
+                del self._buffers['element_adjacency']
             self.register_buffer(
                 'element_adjacency',
                 torch.from_numpy(element_adjacency).float()
             )
         
         if stiffness_importance is not None:
+            if 'stiffness_importance' in self._buffers:
+                del self._buffers['stiffness_importance']
             self.register_buffer(
                 'stiffness_importance',
                 torch.from_numpy(stiffness_importance).float()
             )
         
         if element_coords is not None:
+            if 'element_coords' in self._buffers:
+                del self._buffers['element_coords']
             self.register_buffer(
                 'element_coords',
                 torch.from_numpy(element_coords).float()

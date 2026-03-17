@@ -45,10 +45,17 @@ def compute_metrics(
     iou = tp / (tp + fp + fn + 1e-8)
     
     damaged_mask = true < threshold
+    undamaged_mask = true >= threshold
+    
     if damaged_mask.sum() > 0:
-        damage_mae = np.mean(np.abs(pred[damaged_mask] - true[damaged_mask]))
+        damaged_mae = np.mean(np.abs(pred[damaged_mask] - true[damaged_mask]))
     else:
-        damage_mae = 0.0
+        damaged_mae = 0.0
+    
+    if undamaged_mask.sum() > 0:
+        undamaged_mae = np.mean(np.abs(pred[undamaged_mask] - true[undamaged_mask]))
+    else:
+        undamaged_mae = 0.0
     
     return {
         'mse': float(mse),
@@ -61,7 +68,8 @@ def compute_metrics(
         'balanced_accuracy': float(balanced_accuracy),
         'f1': float(f1),
         'iou': float(iou),
-        'damage_mae': float(damage_mae),
+        'damaged_mae': float(damaged_mae),
+        'undamaged_mae': float(undamaged_mae),
         'threshold': float(threshold),
         'support_damaged': int(np.sum(true_binary)),
         'support_undamaged': int(np.sum(1 - true_binary))

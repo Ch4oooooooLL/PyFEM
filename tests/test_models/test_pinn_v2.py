@@ -31,9 +31,9 @@ class TestResidualBlock:
     def test_skip_connection(self):
         """Test that skip connection works."""
         block = ResidualBlock(dim=32)
+        block.eval()
         x = torch.randn(2, 32)
         
-        # Check that output is x + f(x)
         residual = block.net(x)
         expected = x + residual
         actual = block(x)

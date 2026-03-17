@@ -68,7 +68,7 @@ class TestAdaptivePINNLoss:
         )
         
         model = SimpleModel()
-        predictions = torch.randn(4, 5)
+        predictions = torch.randn(4, 5, requires_grad=True)
         targets = torch.randn(4, 5)
         physics_residual = torch.tensor(0.5)
         
@@ -104,7 +104,6 @@ class TestAdaptivePINNLoss:
             initial_physics_weight=0.1
         )
         
-        # Simulate some training to change weights
         model = SimpleModel()
         for _ in range(3):
             predictions = torch.randn(4, 5, requires_grad=True)
@@ -114,7 +113,6 @@ class TestAdaptivePINNLoss:
             loss, _ = loss_fn(predictions, targets, physics_residual, model)
             loss.backward()
         
-        # Reset weights
         loss_fn.reset_weights(data_weight=2.0, physics_weight=0.5)
         
         assert abs(loss_fn.data_weight.item() - 2.0) < 1e-5
@@ -210,18 +208,14 @@ class TestLossIntegration:
         loss_fn = AdaptivePINNLoss(adaptive=True)
         optimizer = torch.optim.Adam(list(model.parameters()) + list(loss_fn.parameters()), lr=0.01)
         
-        # Training data
-        x = torch.randn(8, 10)
+        x = torch.randn(8, 10, requires_grad=True)
         y = torch.randn(8, 5)
         
-        # Forward
         pred = model(x)
         physics_residual = torch.tensor(0.3)
         
-        # Compute loss
         loss, loss_dict = loss_fn(pred, y, physics_residual, model)
         
-        # Backward
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()

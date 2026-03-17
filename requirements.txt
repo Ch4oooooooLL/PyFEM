@@ -15,6 +15,9 @@ pyyaml>=6.0
 torch>=2.0.0
 tqdm>=4.65.0
 
+# CLI Interface
+rich>=13.0.0
+
 # Jupyter Support
 ipywidgets>=8.0.0
 jupyter>=1.0.0

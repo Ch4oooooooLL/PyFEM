@@ -53,8 +53,8 @@ class AdaptivePINNLoss(nn.Module):
                 torch.tensor([torch.log(torch.tensor(initial_physics_weight))], dtype=torch.float32)
             )
         else:
-            self.register_buffer('data_weight', torch.tensor(initial_data_weight))
-            self.register_buffer('physics_weight', torch.tensor(initial_physics_weight))
+            self.register_buffer('_data_weight_buffer', torch.tensor(initial_data_weight))
+            self.register_buffer('_physics_weight_buffer', torch.tensor(initial_physics_weight))
         
         # Loss history for tracking
         self.register_buffer('loss_history', torch.zeros(100, 2))  # [data, physics]
@@ -69,14 +69,14 @@ class AdaptivePINNLoss(nn.Module):
         """Get current data loss weight."""
         if self.adaptive:
             return torch.exp(self.log_data_weight).clamp(self.min_weight, self.max_weight)
-        return self._buffers['data_weight']
+        return self._buffers['_data_weight_buffer']
     
     @property
     def physics_weight(self) -> torch.Tensor:
         """Get current physics loss weight."""
         if self.adaptive:
             return torch.exp(self.log_physics_weight).clamp(self.min_weight, self.max_weight)
-        return self._buffers['physics_weight']
+        return self._buffers['_physics_weight_buffer']
     
     def forward(
         self,
@@ -115,12 +115,14 @@ class AdaptivePINNLoss(nn.Module):
         
         # Compute weighted loss
         if self.adaptive and model is not None and self.training:
-            # GradNorm-style adaptive weighting
-            total_loss = self._gradnorm_loss(
-                data_loss, physics_loss, w_data, w_physics, model
-            )
+            need_grad = physics_loss.requires_grad and data_loss.requires_grad
+            if need_grad and physics_loss.grad_fn is not None:
+                total_loss = self._gradnorm_loss(
+                    data_loss, physics_loss, w_data, w_physics, model
+                )
+            else:
+                total_loss = w_data * data_loss + w_physics * physics_loss
         else:
-            # Simple weighted sum
             total_loss = w_data * data_loss + w_physics * physics_loss
         
         # Update history
@@ -164,15 +166,20 @@ class AdaptivePINNLoss(nn.Module):
         
         # Compute gradients for each loss term w.r.t. shared parameters
         grads_data = torch.autograd.grad(
-            data_loss, shared_params, retain_graph=True, create_graph=True
+            data_loss, shared_params, retain_graph=True, create_graph=True, allow_unused=True
         )
         grads_physics = torch.autograd.grad(
-            physics_loss, shared_params, retain_graph=True, create_graph=True
+            physics_loss, shared_params, retain_graph=True, create_graph=True, allow_unused=True
         )
         
-        # Compute gradient norms
-        grad_norm_data = torch.stack([g.norm() for g in grads_data]).mean()
-        grad_norm_physics = torch.stack([g.norm() for g in grads_physics]).mean()
+        valid_grads_data = [g for g in grads_data if g is not None]
+        valid_grads_physics = [g for g in grads_physics if g is not None]
+        
+        if not valid_grads_data or not valid_grads_physics:
+            return w_data * data_loss + w_physics * physics_loss
+        
+        grad_norm_data = torch.stack([g.norm() for g in valid_grads_data]).mean()
+        grad_norm_physics = torch.stack([g.norm() for g in valid_grads_physics]).mean()
         
         # Store for monitoring
         self.grad_norm_data = grad_norm_data.detach()
@@ -224,8 +231,8 @@ class AdaptivePINNLoss(nn.Module):
                 self.log_data_weight.fill_(torch.log(torch.tensor(data_weight)))
                 self.log_physics_weight.fill_(torch.log(torch.tensor(physics_weight)))
         else:
-            self.data_weight.fill_(data_weight)
-            self.physics_weight.fill_(physics_weight)
+            self._buffers['_data_weight_buffer'].fill_(data_weight)
+            self._buffers['_physics_weight_buffer'].fill_(physics_weight)
         self.history_ptr = 0
 
 
