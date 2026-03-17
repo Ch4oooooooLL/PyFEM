@@ -1,10 +1,12 @@
 import json
 import os
 import sys
+from multiprocessing import Pool, cpu_count
 from typing import Any, Dict, List, Tuple
 
 import numpy as np
 import yaml
+from tqdm import tqdm
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.dirname(CURRENT_DIR)
@@ -318,47 +320,93 @@ def run_fem_solver(
     return U.T, sigma_vm
 
 
-def generate_dataset(config_path: str = None) -> None:
+def _generate_sample(args: Tuple) -> Tuple[int, Dict[str, np.ndarray]]:
     """
-    主函数：生成统一格式的训练数据集。
+    Worker function for parallel sample generation.
+    Accepts tuple argument for Windows picklability.
+    Returns (sample_idx, result_dict).
     """
-    if config_path is None:
-        config_path = os.path.join(ROOT_DIR, 'dataset_config.yaml')
+    (
+        sample_idx, base_seed, structure_file, E_base,
+        damage_config, load_generation_cfg, load_mode,
+        dt, total_time, damping_alpha, damping_beta,
+        num_nodes, num_elements, dofs_per_node, bcs
+    ) = args
     
-    with open(config_path, 'r', encoding='utf-8') as f:
-        config = yaml.safe_load(f)
+    rng = np.random.default_rng(base_seed + sample_idx)
     
-    structure_file = config.get('structure_file', 'structure.yaml')
-    if not os.path.isabs(structure_file):
-        structure_file = os.path.join(os.path.dirname(config_path), structure_file)
+    nodes_i, elements_i, bcs_i = YAMLParser.build_structure_objects(structure_file)
     
-    time_config = config['time']
-    dt = float(time_config['dt'])
-    total_time = float(time_config['total_time'])
+    for elem_idx, elem in enumerate(elements_i):
+        elem.material.E = E_base[elem_idx]
+    
+    damage_vec, E_damaged = apply_damage(elements_i, damage_config, rng)
+    
+    if load_mode in {'random', 'random_multi_point'}:
+        random_cfg = load_generation_cfg.get('random_multi_point', {})
+        sample_load_specs = _build_random_load_specs(
+            random_cfg=random_cfg,
+            num_nodes=num_nodes,
+            dofs_per_node=dofs_per_node,
+            bcs=bcs_i,
+            rng=rng,
+        )
+    elif load_mode in {'fixed', 'manual'}:
+        sample_load_specs = load_generation_cfg.get('loads', [])
+    else:
+        raise ValueError(f"Unsupported load_generation.mode: {load_mode}")
+    
     num_steps = int(total_time / dt) + 1
+    load_matrix = generate_load_matrix(
+        sample_load_specs, num_nodes, dofs_per_node, dt, num_steps, rng
+    )
     
-    gen_config = config['generation']
-    num_samples = int(gen_config['num_samples'])
-    random_seed = int(gen_config.get('random_seed', 42))
-    rng = np.random.default_rng(random_seed)
+    disp, stress = run_fem_solver(
+        nodes_i, elements_i, bcs_i, load_matrix, dt, total_time,
+        damping_alpha, damping_beta
+    )
     
-    output_file = config.get('output_file', 'dataset/train.npz')
-    if not os.path.isabs(output_file):
-        output_file = os.path.join(os.path.dirname(config_path), output_file)
-    os.makedirs(os.path.dirname(output_file), exist_ok=True)
-    
-    nodes, elements, bcs = YAMLParser.build_structure_objects(structure_file)
-    num_nodes = len(nodes)
-    num_elements = len(elements)
-    num_dofs = sum(len(node.dofs) for node in nodes)
-    dofs_per_node = len(nodes[0].dofs) if nodes else 2
-    
-    load_generation_cfg = config['load_generation']
-    load_mode = str(load_generation_cfg.get('mode', 'fixed')).lower()
-    damage_config = config.get('damage', {})
-    damping_config = config.get('damping', {})
-    alpha = damping_config.get('alpha', 0.1)
-    beta = damping_config.get('beta', 0.01)
+    return (
+        sample_idx,
+        {
+            'load': load_matrix,
+            'E': E_damaged,
+            'disp': disp,
+            'stress': stress,
+            'damage': damage_vec,
+        }
+    )
+
+
+def _save_metadata(output_file: str, metadata: Dict[str, Any]) -> None:
+    """Save metadata JSON file alongside the npz file."""
+    meta_file = os.path.join(os.path.dirname(output_file), 'metadata.json')
+    with open(meta_file, 'w', encoding='utf-8') as f:
+        json.dump(metadata, f, indent=2, ensure_ascii=False)
+
+
+def _generate_sequential(
+    structure_file: str,
+    E_base: np.ndarray,
+    damage_config: Dict,
+    load_generation_cfg: Dict,
+    load_mode: str,
+    dt: float,
+    total_time: float,
+    damping_alpha: float,
+    damping_beta: float,
+    num_nodes: int,
+    num_elements: int,
+    dofs_per_node: int,
+    bcs: List[Tuple[int, int, float]],
+    num_samples: int,
+    random_seed: int,
+    output_file: str,
+    metadata: Dict[str, Any],
+) -> None:
+    """Execute sequential sample generation."""
+    num_steps = int(total_time / dt) + 1
+    num_dofs = num_nodes * dofs_per_node
     
     all_loads = np.zeros((num_samples, num_steps, num_dofs), dtype=float)
     all_E = np.zeros((num_samples, num_elements), dtype=float)
@@ -366,13 +414,8 @@ def generate_dataset(config_path: str = None) -> None:
     all_stress = np.zeros((num_samples, num_steps, num_elements), dtype=float)
     all_damage = np.zeros((num_samples, num_elements), dtype=float)
     
-    E_base = np.array([el.material.E for el in elements], dtype=float)
-    
-    print(f"开始生成数据集: {num_samples} 个样本")
-    print(f"  结构: {num_nodes} 节点, {num_elements} 单元, {num_dofs} DOF")
-    print(f"  时间: {num_steps} 步, dt={dt}s, 总时长={total_time}s")
-    
     for i in range(num_samples):
+        rng = np.random.default_rng(random_seed + i)
         nodes_i, elements_i, bcs_i = YAMLParser.build_structure_objects(structure_file)
         
         for elem_idx, elem in enumerate(elements_i):
@@ -391,17 +434,16 @@ def generate_dataset(config_path: str = None) -> None:
             )
         elif load_mode in {'fixed', 'manual'}:
             sample_load_specs = load_generation_cfg.get('loads', [])
-            if not sample_load_specs:
-                raise ValueError("load_generation.loads is empty for fixed/manual mode.")
         else:
             raise ValueError(f"Unsupported load_generation.mode: {load_mode}")
-
+        
         load_matrix = generate_load_matrix(
             sample_load_specs, num_nodes, dofs_per_node, dt, num_steps, rng
         )
         
         disp, stress = run_fem_solver(
-            nodes_i, elements_i, bcs_i, load_matrix, dt, total_time, alpha, beta
+            nodes_i, elements_i, bcs_i, load_matrix, dt, total_time,
+            damping_alpha, damping_beta
         )
         
         all_loads[i] = load_matrix
@@ -422,6 +464,137 @@ def generate_dataset(config_path: str = None) -> None:
         damage=all_damage,
     )
     
+    _save_metadata(output_file, metadata)
+
+
+def _generate_parallel(
+    structure_file: str,
+    E_base: np.ndarray,
+    damage_config: Dict,
+    load_generation_cfg: Dict,
+    load_mode: str,
+    dt: float,
+    total_time: float,
+    damping_alpha: float,
+    damping_beta: float,
+    num_nodes: int,
+    num_elements: int,
+    dofs_per_node: int,
+    bcs: List[Tuple[int, int, float]],
+    num_samples: int,
+    random_seed: int,
+    output_file: str,
+    metadata: Dict[str, Any],
+    n_jobs: int,
+) -> None:
+    """Execute parallel sample generation using multiprocessing.Pool."""
+    num_steps = int(total_time / dt) + 1
+    num_dofs = num_nodes * dofs_per_node
+    
+    args_list = [
+        (
+            i, random_seed, structure_file, E_base,
+            damage_config, load_generation_cfg, load_mode,
+            dt, total_time, damping_alpha, damping_beta,
+            num_nodes, num_elements, dofs_per_node, bcs
+        )
+        for i in range(num_samples)
+    ]
+    
+    results_unordered = []
+    print(f"Generating {num_samples} samples with {n_jobs} workers...")
+    
+    with Pool(n_jobs) as pool:
+        for result in tqdm(
+            pool.imap_unordered(_generate_sample, args_list),
+            total=num_samples,
+            desc="Samples",
+            unit="sample",
+        ):
+            results_unordered.append(result)
+    
+    results = sorted(results_unordered, key=lambda x: x[0])
+    
+    all_loads = np.stack([r[1]['load'] for r in results])
+    all_E = np.stack([r[1]['E'] for r in results])
+    all_disp = np.stack([r[1]['disp'] for r in results])
+    all_stress = np.stack([r[1]['stress'] for r in results])
+    all_damage = np.stack([r[1]['damage'] for r in results])
+    
+    np.savez_compressed(
+        output_file,
+        load=all_loads,
+        E=all_E,
+        disp=all_disp,
+        stress=all_stress,
+        damage=all_damage,
+    )
+    
+    _save_metadata(output_file, metadata)
+
+
+def generate_dataset(
+    config_path: str | None = None,
+    n_jobs: int = -1,
+    sequential: bool = False,
+) -> None:
+    """
+    主函数：生成统一格式的训练数据集。
+    
+    Args:
+        config_path: Path to config file (default: dataset_config.yaml)
+        n_jobs: Number of parallel workers (-1 for auto = cpu_count - 1)
+        sequential: If True, run in sequential mode (disable parallelization)
+    """
+    if config_path is None:
+        config_path = os.path.join(ROOT_DIR, 'dataset_config.yaml')
+    
+    with open(config_path, 'r', encoding='utf-8') as f:
+        config = yaml.safe_load(f)
+    
+    structure_file = config.get('structure_file', 'structure.yaml')
+    if not os.path.isabs(structure_file):
+        structure_file = os.path.join(os.path.dirname(config_path), structure_file)
+    
+    time_config = config['time']
+    dt = float(time_config['dt'])
+    total_time = float(time_config['total_time'])
+    num_steps = int(total_time / dt) + 1
+    
+    gen_config = config['generation']
+    num_samples = int(gen_config['num_samples'])
+    random_seed = int(gen_config.get('random_seed', 42))
+    
+    output_file = config.get('output_file', 'dataset/train.npz')
+    if not os.path.isabs(output_file):
+        output_file = os.path.join(os.path.dirname(config_path), output_file)
+    os.makedirs(os.path.dirname(output_file), exist_ok=True)
+    
+    nodes, elements, bcs = YAMLParser.build_structure_objects(structure_file)
+    num_nodes = len(nodes)
+    num_elements = len(elements)
+    num_dofs = sum(len(node.dofs) for node in nodes)
+    dofs_per_node = len(nodes[0].dofs) if nodes else 2
+    
+    load_generation_cfg = config['load_generation']
+    load_mode = str(load_generation_cfg.get('mode', 'fixed')).lower()
+    damage_config = config.get('damage', {})
+    damping_config = config.get('damping', {})
+    alpha = damping_config.get('alpha', 0.1)
+    beta = damping_config.get('beta', 0.01)
+    
+    E_base = np.array([el.material.E for el in elements], dtype=float)
+    
+    if n_jobs < 1:
+        n_jobs = max(1, cpu_count() - 1)
+    
+    use_sequential = sequential or n_jobs == 1
+    
+    print(f"开始生成数据集: {num_samples} 个样本")
+    print(f"  结构: {num_nodes} 节点, {num_elements} 单元, {num_dofs} DOF")
+    print(f"  时间: {num_steps} 步, dt={dt}s, 总时长={total_time}s")
+    print(f"  模式: {'串行' if use_sequential else f'并行({n_jobs} workers)'}")
+    
     metadata = {
         'structure_file': os.path.basename(structure_file),
         'num_samples': num_samples,
@@ -436,29 +609,88 @@ def generate_dataset(config_path: str = None) -> None:
         'damping_beta': beta,
         'load_mode': load_mode,
         'data_keys': ['load', 'E', 'disp', 'stress', 'damage'],
-        'shapes': {
-            'load': list(all_loads.shape),
-            'E': list(all_E.shape),
-            'disp': list(all_disp.shape),
-            'stress': list(all_stress.shape),
-            'damage': list(all_damage.shape),
-        }
+        'parallel': not use_sequential,
+        'n_jobs': n_jobs if not use_sequential else 1,
     }
     
-    meta_file = os.path.join(os.path.dirname(output_file), 'metadata.json')
-    with open(meta_file, 'w', encoding='utf-8') as f:
-        json.dump(metadata, f, indent=2, ensure_ascii=False)
+    if use_sequential:
+        _generate_sequential(
+            structure_file=structure_file,
+            E_base=E_base,
+            damage_config=damage_config,
+            load_generation_cfg=load_generation_cfg,
+            load_mode=load_mode,
+            dt=dt,
+            total_time=total_time,
+            damping_alpha=alpha,
+            damping_beta=beta,
+            num_nodes=num_nodes,
+            num_elements=num_elements,
+            dofs_per_node=dofs_per_node,
+            bcs=bcs,
+            num_samples=num_samples,
+            random_seed=random_seed,
+            output_file=output_file,
+            metadata=metadata,
+        )
+    else:
+        _generate_parallel(
+            structure_file=structure_file,
+            E_base=E_base,
+            damage_config=damage_config,
+            load_generation_cfg=load_generation_cfg,
+            load_mode=load_mode,
+            dt=dt,
+            total_time=total_time,
+            damping_alpha=alpha,
+            damping_beta=beta,
+            num_nodes=num_nodes,
+            num_elements=num_elements,
+            dofs_per_node=dofs_per_node,
+            bcs=bcs,
+            num_samples=num_samples,
+            random_seed=random_seed,
+            output_file=output_file,
+            metadata=metadata,
+            n_jobs=n_jobs,
+        )
     
+    data = np.load(output_file)
     print(f"\n数据集生成完成!")
     print(f"  输出文件: {output_file}")
-    print(f"  元数据: {meta_file}")
     print(f"\n数据维度:")
-    print(f"  load:   {all_loads.shape}  # (N, T, DOF) - 载荷时程")
-    print(f"  E:      {all_E.shape}     # (N, elem) - 弹性模量(含损伤)")
-    print(f"  disp:   {all_disp.shape}  # (N, T, DOF) - 位移响应")
-    print(f"  stress: {all_stress.shape} # (N, T, elem) - 应力响应")
-    print(f"  damage: {all_damage.shape} # (N, elem) - 损伤程度(1.0=无损)")
+    print(f"  load:   {data['load'].shape}  # (N, T, DOF) - 载荷时程")
+    print(f"  E:      {data['E'].shape}     # (N, elem) - 弹性模量(含损伤)")
+    print(f"  disp:   {data['disp'].shape}  # (N, T, DOF) - 位移响应")
+    print(f"  stress: {data['stress'].shape} # (N, T, elem) - 应力响应")
+    print(f"  damage: {data['damage'].shape} # (N, elem) - 损伤程度(1.0=无损)")
 
 
 if __name__ == "__main__":
-    generate_dataset()
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='Generate FEM training dataset')
+    parser.add_argument(
+        '--config', '-c',
+        type=str,
+        default=None,
+        help='Path to config file (default: dataset_config.yaml)'
+    )
+    parser.add_argument(
+        '--jobs', '-j',
+        type=int,
+        default=-1,
+        help='Number of parallel workers (default: cpu_count - 1)'
+    )
+    parser.add_argument(
+        '--seq',
+        action='store_true',
+        help='Run in sequential mode (disable parallelization)'
+    )
+    args = parser.parse_args()
+    
+    generate_dataset(
+        config_path=args.config,
+        n_jobs=args.jobs,
+        sequential=args.seq,
+    )
