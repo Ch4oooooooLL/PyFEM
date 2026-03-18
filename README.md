@@ -387,7 +387,57 @@ $$
 
 本节介绍如何从零开始运行项目的完整流程，包括环境配置、数据生成、模型训练和工况预测。
 
-### 5.1 环境配置
+### 5.0 统一 CLI 工具（推荐）
+
+项目提供了统一的命令行工具 `cli.py`，集成所有功能，无需切换目录即可运行完整流程：
+
+```bash
+# 查看帮助
+python cli.py --help
+
+# 运行完整流程（一键执行：静态分析 → 数据生成 → 模型训练 → 工况预测）
+python cli.py pipeline
+
+# 或分步执行：
+python cli.py static              # FEM 静态分析
+python cli.py dataset -j 4        # 并行生成数据集（4 核）
+python cli.py train --model gt    # 训练 GT 模型
+python cli.py predict             # 工况预测
+python cli.py status              # 检查项目状态
+```
+
+**CLI 命令速查：**
+
+| 命令 | 功能 | 常用参数 |
+|------|------|----------|
+| `static` | FEM 静态分析 | `--config` 指定结构配置 |
+| `dataset` | 生成训练数据集 | `-j` 并行核数，`--seq` 串行模式 |
+| `train` | 训练深度学习模型 | `--model gt/pinn/both`, `--epochs` |
+| `predict` | 运行工况预测 | `--config` 指定工况配置 |
+| `pipeline` | 运行完整流水线 | `--skip-dataset`, `--skip-train` |
+| `status` | 检查项目状态 | - |
+
+**完整 CLI 示例：**
+
+```bash
+# 1. 检查环境
+python cli.py status
+
+# 2. 运行完整流程（自动按依赖顺序执行）
+python cli.py pipeline --jobs 4
+
+# 3. 仅重新训练模型（跳过数据生成）
+python cli.py pipeline --skip-dataset --model both --epochs 150
+
+# 4. 仅运行预测（已有训练好的模型）
+python cli.py predict --config condition_case.yaml
+```
+
+> **提示**：CLI 工具会自动设置 PYTHONPATH 并实时显示彩色日志输出，推荐作为首选使用方式。
+
+---
+
+### 5.1 环境配置（传统方式）
 
 ```bash
 # 激活conda环境
