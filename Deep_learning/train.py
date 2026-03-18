@@ -328,7 +328,12 @@ def train_model(
     best_val_loss = float('inf')
     scaler = _build_grad_scaler(amp_enabled=amp_enabled, device=device)
     
-    for epoch in range(config.get('epochs', 100)):
+    total_epochs = config.get('epochs', 100)
+    print(f"Starting training for {total_epochs} epochs...", flush=True)
+    
+    for epoch in range(total_epochs):
+        print(f"Epoch {epoch+1}/{total_epochs} - Training...", flush=True)
+        
         train_metrics = train_one_epoch(
             model,
             train_loader,
@@ -341,6 +346,7 @@ def train_model(
             scaler=scaler,
         )
         
+        print(f"Epoch {epoch+1}/{total_epochs} - Validating...", flush=True)
         val_metrics = evaluate(
             model,
             val_loader,
@@ -363,14 +369,16 @@ def train_model(
             best_val_loss = val_metrics['loss']
             torch.save(model.state_dict(), os.path.join(save_dir, f'{model_type}_best.pth'))
         
-        if (epoch + 1) % 10 == 0:
-            print(f"Epoch {epoch+1}: train_loss={train_metrics['loss']:.4f}, "
-                  f"val_loss={val_metrics['loss']:.4f}, val_mae={val_metrics['mae']:.4f}, "
-                  f"val_f1={val_metrics['f1']:.4f}")
+        # 每轮都打印进度
+        print(f"Epoch {epoch+1}/{total_epochs}: train_loss={train_metrics['loss']:.4f}, "
+              f"val_loss={val_metrics['loss']:.4f}, val_mae={val_metrics['mae']:.4f}, "
+              f"val_f1={val_metrics['f1']:.4f}", flush=True)
         
         if early_stopping(val_metrics['loss']):
-            print(f"Early stopping at epoch {epoch+1}")
+            print(f"Early stopping at epoch {epoch+1}", flush=True)
             break
+    
+    print(f"Training completed!", flush=True)
     
     return history
 

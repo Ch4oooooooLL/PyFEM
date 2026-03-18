@@ -62,10 +62,23 @@ def run_command(cmd: list[str], description: str, cwd: Optional[Path] = None, ma
     """运行命令并显示进度，实时显示子进程输出日志"""
     from rich.console import Group
     from rich.text import Text
+    import threading
+    import queue
     
     env = os.environ.copy()
-    env["PYTHONPATH"] = str(ROOT_DIR)
+    # 包含项目根目录和当前 Python 环境的所有包路径
+    pythonpath_parts = [str(ROOT_DIR)]
+    
+    # 添加当前 sys.path 中的所有路径（包括 D:\PythonPackages）
+    for p in sys.path:
+        if p and p not in pythonpath_parts:
+            pythonpath_parts.append(p)
+    
+    env["PYTHONPATH"] = os.pathsep.join(pythonpath_parts)
+    # 禁用 Python 输出缓冲，确保实时显示训练日志
+    env["PYTHONUNBUFFERED"] = "1"
     log_lines: deque[str] = deque(maxlen=max_log_lines)
+    log_queue: queue.Queue[str] = queue.Queue()
     
     progress = Progress(
         SpinnerColumn(),
@@ -85,6 +98,15 @@ def run_command(cmd: list[str], description: str, cwd: Optional[Path] = None, ma
             return Group(progress, log_panel)
         return Group(progress)
     
+    def reader_thread(pipe, q):
+        """后台线程读取子进程输出"""
+        try:
+            for line in iter(pipe.readline, ''):
+                if line:
+                    q.put(line.rstrip())
+        finally:
+            pipe.close()
+    
     with Live(make_renderable(), console=console, refresh_per_second=10) as live:
         process = subprocess.Popen(
             cmd,
@@ -97,18 +119,34 @@ def run_command(cmd: list[str], description: str, cwd: Optional[Path] = None, ma
             bufsize=1,
         )
         
-        while True:
-            if process.stdout is None:
-                break
-            line = process.stdout.readline()
-            if not line and process.poll() is not None:
-                break
-            if line:
-                stripped = line.rstrip()
-                if stripped:
-                    log_lines.append(stripped)
-                    live.update(make_renderable())
+        # 启动后台线程读取输出
+        thread = threading.Thread(target=reader_thread, args=(process.stdout, log_queue))
+        thread.daemon = True
+        thread.start()
         
+        # 主循环：从队列读取并更新显示
+        while True:
+            try:
+                # 非阻塞读取队列，超时 0.1 秒
+                line = log_queue.get(timeout=0.1)
+                if line:
+                    log_lines.append(line)
+                    live.update(make_renderable())
+            except queue.Empty:
+                # 检查进程是否结束
+                if process.poll() is not None:
+                    # 进程结束，清空剩余输出
+                    while not log_queue.empty():
+                        try:
+                            line = log_queue.get_nowait()
+                            if line:
+                                log_lines.append(line)
+                        except queue.Empty:
+                            break
+                    live.update(make_renderable())
+                    break
+        
+        thread.join(timeout=1.0)
         process.wait()
         progress.update(task, completed=True)
         live.update(make_renderable())
@@ -167,24 +205,74 @@ def cmd_train(args: argparse.Namespace) -> int:
     """训练深度学习模型"""
     console.print(Panel("[bold blue]Model Training[/bold blue]", border_style="blue"))
     
+    # 检测 CUDA 可用性
+    import torch
+    cuda_available = torch.cuda.is_available()
+    cuda_device_count = torch.cuda.device_count() if cuda_available else 0
+    
+    if cuda_available:
+        cuda_device_name = torch.cuda.get_device_name(0)
+        console.print(f"[green]检测到 {cuda_device_count} 个 GPU 设备:[/green]")
+        for i in range(cuda_device_count):
+            console.print(f"  [cyan]{i}:[/cyan] {torch.cuda.get_device_name(i)}")
+    else:
+        console.print("[yellow]警告: 未检测到可用的 GPU (CUDA)[/yellow]")
+    
+    # 询问用户选择设备
+    if args.device:
+        # 如果命令行已经指定了设备，直接使用
+        device_choice = args.device.lower()
+    else:
+        # 交互式询问
+        if cuda_available:
+            device_choice = console.input("[bold]选择训练设备 (cpu/cuda/auto)[/bold] [默认: cuda]: ").strip().lower()
+            if not device_choice:
+                device_choice = "cuda"
+        else:
+            console.print("[red]错误: 您选择了 GPU 训练，但未检测到可用的 GPU。[/red]")
+            console.print("[yellow]选项:[/yellow]")
+            console.print("  1. 使用 CPU 继续训练")
+            console.print("  2. 取消训练")
+            choice = console.input("[bold]请选择 (1/2)[/bold] [默认: 1]: ").strip()
+            if choice == "2":
+                console.print("[red]训练已取消[/red]")
+                return 1
+            device_choice = "cpu"
+    
+    # 验证设备选择
+    if device_choice in ["cuda", "gpu"] and not cuda_available:
+        console.print("[red]错误: 您选择了 GPU 训练，但未检测到可用的 GPU。[/red]")
+        console.print("[yellow]请检查:[/yellow]")
+        console.print("  - NVIDIA 显卡驱动是否安装")
+        console.print("  - CUDA 工具包是否正确安装")
+        console.print("  - PyTorch 是否安装了 CUDA 版本")
+        console.print("\n[yellow]您可以使用以下命令安装 CUDA 版本的 PyTorch:[/yellow]")
+        console.print("  pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121")
+        return 1
+    
+    if device_choice == "auto":
+        device_choice = "cuda" if cuda_available else "cpu"
+    
+    console.print(f"[green]使用设备: {device_choice}[/green]")
+    
     model = args.model or "gt"
     epochs = args.epochs or 100
     config = args.config or ROOT_DIR / "dataset_config.yaml"
     
+    # 使用 python -m 方式运行，确保使用当前环境中的 Python
+    # 添加 -u 参数禁用输出缓冲，确保实时显示训练日志
     cmd_args = [
-        sys.executable,
-        str(DEEP_LEARNING_DIR / "train.py"),
+        "python", "-u", "-m", "Deep_learning.train",
         "--config", str(config),
         "--model", model,
         "--epochs", str(epochs),
+        "--device", device_choice,
     ]
     
     if args.batch_size:
         cmd_args.extend(["--batch_size", str(args.batch_size)])
     if args.lr:
         cmd_args.extend(["--lr", str(args.lr)])
-    if args.device:
-        cmd_args.extend(["--device", args.device])
     if args.eval_only:
         cmd_args.append("--eval_only")
     
