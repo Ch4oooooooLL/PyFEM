@@ -62,10 +62,10 @@ def evaluate_damage_history(
     err_vs_true = predicted_damage_index - true_damage_index
 
     metrics = {
-        "time_mae_vs_fem": float(np.mean(np.abs(err_vs_fem))),
-        "time_rmse_vs_fem": float(np.sqrt(np.mean(err_vs_fem**2))),
-        "final_mae_vs_fem": float(np.mean(np.abs(err_vs_fem[-1]))),
-        "final_rmse_vs_fem": float(np.sqrt(np.mean(err_vs_fem[-1] ** 2))),
+        "proxy_time_mae_vs_fem": float(np.mean(np.abs(err_vs_fem))),
+        "proxy_time_rmse_vs_fem": float(np.sqrt(np.mean(err_vs_fem**2))),
+        "proxy_final_mae_vs_fem": float(np.mean(np.abs(err_vs_fem[-1]))),
+        "proxy_final_rmse_vs_fem": float(np.sqrt(np.mean(err_vs_fem[-1] ** 2))),
         "time_mae_vs_true": float(np.mean(np.abs(err_vs_true))),
         "time_rmse_vs_true": float(np.sqrt(np.mean(err_vs_true**2))),
         "final_mae_vs_true": float(np.mean(np.abs(err_vs_true[-1]))),

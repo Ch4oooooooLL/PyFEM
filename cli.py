@@ -387,17 +387,23 @@ def cmd_status(args: argparse.Namespace) -> int:
     
     # Check model checkpoints
     gt_ckpt = DEEP_LEARNING_DIR / "checkpoints" / "gt_best.pth"
-    pinn_ckpt = DEEP_LEARNING_DIR / "checkpoints" / "pinn_best.pth"
+    pinn_v2_ckpt = DEEP_LEARNING_DIR / "checkpoints" / "pinn_v2_best.pth"
+    legacy_pinn_ckpt = DEEP_LEARNING_DIR / "checkpoints" / "pinn_best.pth"
     
     if gt_ckpt.exists():
         table.add_row("GT Model", "[OK] Ready", str(gt_ckpt))
     else:
         table.add_row("GT Model", "[X] Missing", "Run 'cli.py train --model gt'")
     
-    if pinn_ckpt.exists():
-        table.add_row("PINN Model", "[OK] Ready", str(pinn_ckpt))
+    if pinn_v2_ckpt.exists():
+        table.add_row("PINN V2 Model", "[OK] Ready", str(pinn_v2_ckpt))
     else:
-        table.add_row("PINN Model", "[X] Missing", "Run 'cli.py train --model pinn'")
+        table.add_row("PINN V2 Model", "[X] Missing", "Run 'cli.py train --model pinn_v2'")
+
+    if legacy_pinn_ckpt.exists():
+        table.add_row("Legacy PINN", "[OK] Ready", str(legacy_pinn_ckpt))
+    else:
+        table.add_row("Legacy PINN", "[X] Optional", "Run 'cli.py train --model legacy_pinn'")
     
     # Check condition config
     condition_config = ROOT_DIR / "condition_case.yaml"
@@ -441,7 +447,7 @@ Examples:
     
     # train command
     train_parser = subparsers.add_parser("train", help="Train deep learning models")
-    train_parser.add_argument("--model", choices=["gt", "pinn", "both"], help="Model type")
+    train_parser.add_argument("--model", choices=["gt", "pinn", "legacy_pinn", "pinn_v2", "both"], help="Model type")
     train_parser.add_argument("--config", type=Path, help="Path to config YAML")
     train_parser.add_argument("--epochs", type=int, help="Number of epochs")
     train_parser.add_argument("--batch_size", type=int, help="Batch size")

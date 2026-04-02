@@ -275,7 +275,8 @@ def run_condition_pipeline(config_path: str, output_dir_override: str | None = N
     model_type = str(dl_cfg.get("model_type", "gt")).lower()
     feature_mode = str(dl_cfg.get("feature_mode", "response")).lower()
     checkpoint_path = _resolve_path(config_dir, dl_cfg.get("checkpoint", "Deep_learning/checkpoints/gt_best.pth"))
-    dataset_npz = _resolve_path(config_dir, dl_cfg.get("dataset_npz", "dataset/train.npz"))
+    dataset_npz_raw = dl_cfg.get("dataset_npz")
+    dataset_npz = _resolve_path(config_dir, dataset_npz_raw) if dataset_npz_raw else None
     device = str(dl_cfg.get("device", "auto"))
 
     predictor = ConditionDamagePredictor(
@@ -296,6 +297,7 @@ def run_condition_pipeline(config_path: str, output_dir_override: str | None = N
         fem_damage_index=fem_damage_index,
         true_damage_index=true_damage_index,
     )
+    metrics["history_mode"] = predictor.history_mode
 
     npz_path = os.path.join(run_dir, "result_bundle.npz")
     np.savez_compressed(
@@ -369,30 +371,34 @@ def run_condition_pipeline(config_path: str, output_dir_override: str | None = N
 
     model_types = []
     gt_ckpt_exists = os.path.exists(checkpoint_path)
+    pinn_v2_ckpt_path = checkpoint_path.replace("gt_best", "pinn_v2_best")
+    pinn_v2_ckpt_exists = os.path.exists(pinn_v2_ckpt_path)
     pinn_ckpt_path = checkpoint_path.replace("gt_best", "pinn_best")
     pinn_ckpt_exists = os.path.exists(pinn_ckpt_path)
     
     if gt_ckpt_exists:
         model_types.append("gt")
-    if pinn_ckpt_exists:
-        model_types.append("pinn")
+    if pinn_v2_ckpt_exists:
+        model_types.append("pinn_v2")
+    elif pinn_ckpt_exists:
+        model_types.append("legacy_pinn")
 
     for mtype in model_types:
         if mtype == "gt":
             dl_pred_factors = dl_damage_factor_final
             model_label = "GT"
         else:
-            checkpoint_path_pinn = checkpoint_path.replace("gt_best", "pinn_best")
+            checkpoint_path_pinn = pinn_v2_ckpt_path if mtype == "pinn_v2" else pinn_ckpt_path
             predictor_pinn = ConditionDamagePredictor(
                 structure_file=structure_file,
                 dataset_npz=dataset_npz,
                 checkpoint_path=checkpoint_path_pinn,
-                model_type="pinn",
+                model_type=mtype,  # type: ignore[arg-type]
                 feature_mode=feature_mode,
                 device=device,
             )
             dl_pred_factors = predictor_pinn.predict_final_factor(disp_dmg, load_hist=load_matrix)
-            model_label = "PINN"
+            model_label = "PINN_V2" if mtype == "pinn_v2" else "LEGACY_PINN"
 
         disp_dl, stress_dl = _run_fem_with_damage(dl_pred_factors)
 
@@ -415,6 +421,7 @@ def run_condition_pipeline(config_path: str, output_dir_override: str | None = N
         "model_type": model_type,
         "feature_mode": feature_mode,
         "checkpoint": checkpoint_path,
+        "history_mode": predictor.history_mode,
         "metrics": metrics,
     }
     return summary

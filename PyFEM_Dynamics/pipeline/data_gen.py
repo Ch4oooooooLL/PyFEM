@@ -250,21 +250,47 @@ def apply_damage(elements: List[TrussElement2D], config: Dict, rng: np.random.Ge
     
     if not config.get('enabled', True):
         return damage_vec, E_damaged
+
+    healthy_sample_ratio = float(config.get('healthy_sample_ratio', 0.0))
+    if healthy_sample_ratio > 0.0 and float(rng.random()) < healthy_sample_ratio:
+        return damage_vec, E_damaged
     
     min_damaged = config.get('min_damaged_elements', 1)
     max_damaged = config.get('max_damaged_elements', 3)
     reduction_range = config.get('reduction_range', [0.5, 0.9])
+    near_healthy_ratio = float(config.get('near_healthy_ratio', 0.0))
+    near_healthy_reduction_range = config.get('near_healthy_reduction_range', [0.93, 0.99])
+    active_reduction_range = (
+        near_healthy_reduction_range
+        if near_healthy_ratio > 0.0 and float(rng.random()) < near_healthy_ratio
+        else reduction_range
+    )
     
     num_damaged = int(rng.integers(min_damaged, max_damaged + 1))
     damaged_indices = rng.choice(num_elements, size=num_damaged, replace=False)
     
     for idx in damaged_indices:
-        factor = float(rng.uniform(reduction_range[0], reduction_range[1]))
+        factor = float(rng.uniform(active_reduction_range[0], active_reduction_range[1]))
         damage_vec[idx] = factor
         E_damaged[idx] = elements[idx].material.E * factor
         elements[idx].material.E = E_damaged[idx]
     
     return damage_vec, E_damaged
+
+
+def summarize_damage_vector(damage_vec: np.ndarray) -> Dict[str, float]:
+    damage_arr = np.asarray(damage_vec, dtype=float)
+    severity = 1.0 - float(np.min(damage_arr))
+    damaged_mask = damage_arr < 0.999999
+    count = int(np.sum(damaged_mask))
+    min_factor = float(np.min(damage_arr))
+    return {
+        'damage_count': float(count),
+        'damage_min_factor': min_factor,
+        'damage_severity': severity,
+        'is_healthy': float(count == 0),
+        'is_near_healthy': float(count > 0 and min_factor >= 0.95),
+    }
 
 
 def run_fem_solver(
@@ -413,6 +439,11 @@ def _generate_sequential(
     all_disp = np.zeros((num_samples, num_steps, num_dofs), dtype=float)
     all_stress = np.zeros((num_samples, num_steps, num_elements), dtype=float)
     all_damage = np.zeros((num_samples, num_elements), dtype=float)
+    all_damage_count = np.zeros(num_samples, dtype=np.int32)
+    all_damage_min_factor = np.ones(num_samples, dtype=float)
+    all_damage_severity = np.zeros(num_samples, dtype=float)
+    all_is_healthy = np.zeros(num_samples, dtype=np.int32)
+    all_is_near_healthy = np.zeros(num_samples, dtype=np.int32)
     
     for i in range(num_samples):
         rng = np.random.default_rng(random_seed + i)
@@ -451,6 +482,12 @@ def _generate_sequential(
         all_disp[i] = disp
         all_stress[i] = stress
         all_damage[i] = damage_vec
+        damage_summary = summarize_damage_vector(damage_vec)
+        all_damage_count[i] = int(damage_summary['damage_count'])
+        all_damage_min_factor[i] = damage_summary['damage_min_factor']
+        all_damage_severity[i] = damage_summary['damage_severity']
+        all_is_healthy[i] = int(damage_summary['is_healthy'])
+        all_is_near_healthy[i] = int(damage_summary['is_near_healthy'])
         
         if (i + 1) % 100 == 0 or (i + 1) == num_samples:
             print(f"  进度: {i + 1}/{num_samples}")
@@ -462,6 +499,11 @@ def _generate_sequential(
         disp=all_disp,
         stress=all_stress,
         damage=all_damage,
+        damage_count=all_damage_count,
+        damage_min_factor=all_damage_min_factor,
+        damage_severity=all_damage_severity,
+        is_healthy=all_is_healthy,
+        is_near_healthy=all_is_near_healthy,
     )
     
     _save_metadata(output_file, metadata)
@@ -520,6 +562,26 @@ def _generate_parallel(
     all_disp = np.stack([r[1]['disp'] for r in results])
     all_stress = np.stack([r[1]['stress'] for r in results])
     all_damage = np.stack([r[1]['damage'] for r in results])
+    all_damage_count = np.asarray(
+        [summarize_damage_vector(r[1]['damage'])['damage_count'] for r in results],
+        dtype=np.int32,
+    )
+    all_damage_min_factor = np.asarray(
+        [summarize_damage_vector(r[1]['damage'])['damage_min_factor'] for r in results],
+        dtype=float,
+    )
+    all_damage_severity = np.asarray(
+        [summarize_damage_vector(r[1]['damage'])['damage_severity'] for r in results],
+        dtype=float,
+    )
+    all_is_healthy = np.asarray(
+        [int(summarize_damage_vector(r[1]['damage'])['is_healthy']) for r in results],
+        dtype=np.int32,
+    )
+    all_is_near_healthy = np.asarray(
+        [int(summarize_damage_vector(r[1]['damage'])['is_near_healthy']) for r in results],
+        dtype=np.int32,
+    )
     
     np.savez_compressed(
         output_file,
@@ -528,6 +590,11 @@ def _generate_parallel(
         disp=all_disp,
         stress=all_stress,
         damage=all_damage,
+        damage_count=all_damage_count,
+        damage_min_factor=all_damage_min_factor,
+        damage_severity=all_damage_severity,
+        is_healthy=all_is_healthy,
+        is_near_healthy=all_is_near_healthy,
     )
     
     _save_metadata(output_file, metadata)
@@ -608,7 +675,18 @@ def generate_dataset(
         'damping_alpha': alpha,
         'damping_beta': beta,
         'load_mode': load_mode,
-        'data_keys': ['load', 'E', 'disp', 'stress', 'damage'],
+        'data_keys': [
+            'load',
+            'E',
+            'disp',
+            'stress',
+            'damage',
+            'damage_count',
+            'damage_min_factor',
+            'damage_severity',
+            'is_healthy',
+            'is_near_healthy',
+        ],
         'parallel': not use_sequential,
         'n_jobs': n_jobs if not use_sequential else 1,
     }

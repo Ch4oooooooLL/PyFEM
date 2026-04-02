@@ -7,12 +7,16 @@ README_REVIEW.md
 agent.md
 CLAUDE.md
 AGENTS.md
+.claude/
+nul
 
 # Python related
 __pycache__/
+.pytest_cache/
 *.pyc
 *.pyo
 *.pyd
+.coverage
 
 # Datasets and postprocess outputs
 dataset/

@@ -10,13 +10,13 @@ __all__ = ['compute_metrics', 'TrainingVisualizer', 'visualize_results']
 
 # Optional imports: allow postprocessing utilities to run even when torch is absent.
 try:
-    from .models.lstm_model import LSTMDamagePredictor
     from .models.pinn_model import PINNDamagePredictor
+    from .models.pinn_model_v2 import PINNDamagePredictorV2
     from .data.dataset import FEMDataset
 
     __all__.extend([
-        'LSTMDamagePredictor',
         'PINNDamagePredictor',
+        'PINNDamagePredictorV2',
         'FEMDataset',
     ])
 except Exception:

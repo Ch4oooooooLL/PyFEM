@@ -483,6 +483,7 @@ def main():
     print(f"Loading dataset from {args.data_path}")
     dataset = FEMDataset(args.data_path, mode='response')
     train_set, val_set, test_set = split_dataset(dataset, seed=args.seed)
+    dataset.fit_normalization(train_set.indices)
     
     train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True)
     val_loader = DataLoader(val_set, batch_size=args.batch_size, shuffle=False)
@@ -550,6 +551,25 @@ def main():
     model, history = train_pinn_v2(
         model, train_loader, val_loader, config, device, args.output_dir
     )
+
+    checkpoint_path = os.path.join(args.output_dir, 'pinn_v2_best.pth')
+    checkpoint = torch.load(checkpoint_path, map_location=device)
+    checkpoint['model_name'] = 'pinn_v2'
+    checkpoint['model_args'] = {
+        'input_dim': int(input_dim),
+        'hidden_dims': list(config.get('hidden_dims', [256, 256, 128])),
+        'output_dim': int(output_dim),
+        'num_residual_blocks': int(config.get('num_residual_blocks', 2)),
+        'dropout': float(config.get('dropout', 0.3)),
+        'use_physics': bool(config.get('use_physics', True)),
+    }
+    checkpoint['preprocessing'] = {
+        key: value.tolist()
+        for key, value in dataset.get_normalization_stats().items()
+    }
+    checkpoint['training_task'] = str(config.get('task_mode', 'final_state'))
+    checkpoint['feature_mode'] = 'response'
+    torch.save(checkpoint, checkpoint_path)
     
     # Final evaluation
     test_metrics = evaluate_pinn_v2(model, test_loader, device)
