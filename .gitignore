@@ -27,6 +27,7 @@ Deep_learning/figures/report_*/
 Condition_prediction/outputs/
 
 # IDE and editor
+.planning/
 .vscode/
 .idea/
 *.swp
