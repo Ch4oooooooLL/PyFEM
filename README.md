@@ -1,6 +1,6 @@
 # 二维结构动力学仿真与损伤识别学习实践
 
-> 说明：为兼容 GitHub 与 Gitee，本文中的公式统一采用纯文本公式块与变量说明，不使用 LaTeX 数学渲染。
+> 说明：为兼容 GitHub 与 Gitee，本文中的公式统一使用行内 `$...$` 与块级 `$$...$$` 语法；块级公式均单独成行，并在前后保留空行。
 
 ## 1. 项目概况
 本项目主要研究结构动力学仿真与数据驱动损伤识别的结合应用。内容由以下三个主要部分构成：
@@ -62,25 +62,27 @@ class Node:
     - [`./PyFEM_Dynamics/pipeline/data_gen.py`](./PyFEM_Dynamics/pipeline/data_gen.py): 工况采样与数据集生成逻辑（当前规模 20,000 样本）。
 
 ### 2.2 单元列式与矩阵计算
-针对二维拉压桁架单元，其在局部坐标系下的刚度矩阵 `k^e` 和一致质量矩阵 `m^e` 可写为：
+针对二维拉压桁架单元，其在局部坐标系下的刚度矩阵 $k^e$ 和一致质量矩阵 $m^e$ 可写为：
 
-```text
-k^e = (E * A / L) * [
-  [ 1, 0, -1, 0],
-  [ 0, 0,  0, 0],
-  [-1, 0,  1, 0],
-  [ 0, 0,  0, 0]
-]
-```
+$$
+k^e = \frac{EA}{L}
+\begin{bmatrix}
+1 & 0 & -1 & 0 \\
+0 & 0 & 0 & 0 \\
+-1 & 0 & 1 & 0 \\
+0 & 0 & 0 & 0
+\end{bmatrix}
+$$
 
-```text
-m^e = (rho * A * L / 6) * [
-  [2, 0, 1, 0],
-  [0, 2, 0, 1],
-  [1, 0, 2, 0],
-  [0, 1, 0, 2]
-]
-```
+$$
+m^e = \frac{\rho A L}{6}
+\begin{bmatrix}
+2 & 0 & 1 & 0 \\
+0 & 2 & 0 & 1 \\
+1 & 0 & 2 & 0 \\
+0 & 1 & 0 & 2
+\end{bmatrix}
+$$
 
 *   **实现代码** ([`./PyFEM_Dynamics/core/element.py`](./PyFEM_Dynamics/core/element.py)):
 ```python
@@ -98,14 +100,15 @@ def get_local_stiffness(self):
 ### 2.3 全局矩阵组装
 利用**直接刚度法 (Direct Stiffness Method)** 将各单元贡献累加至全局矩阵 `K` 与 `M` 中。系统在 [`./PyFEM_Dynamics/solver/assembler.py`](./PyFEM_Dynamics/solver/assembler.py) 中提供了集中质量矩阵（Lumped Mass Matrix）的选项：
 
-```text
-m_lumped^e = (rho * A * L / 2) * [
-  [1, 0, 0, 0],
-  [0, 1, 0, 0],
-  [0, 0, 1, 0],
-  [0, 0, 0, 1]
-]
-```
+$$
+m_{\mathrm{lumped}}^e = \frac{\rho A L}{2}
+\begin{bmatrix}
+1 & 0 & 0 & 0 \\
+0 & 1 & 0 & 0 \\
+0 & 0 & 1 & 0 \\
+0 & 0 & 0 & 1
+\end{bmatrix}
+$$
 
 *   **组装代码** ([`./PyFEM_Dynamics/solver/assembler.py`](./PyFEM_Dynamics/solver/assembler.py)):
 ```python
@@ -121,19 +124,21 @@ def assemble_K(self):
 ### 2.4 边界条件的数值处理
 为处理本质边界条件并消除矩阵奇异性，程序实现了 **划零划一法 (Zero-One Substitution Method)**：
 
-对于受约束自由度 `i`，修改后的系统满足：
+对于受约束自由度 $i$，修改后的系统满足：
 
-```text
-K'[i, i] = 1
-K'[i, j] = 0,  j != i
-F'[i]    = u_i
-```
+$$
+K'[i, i] = 1,\qquad F'[i] = u_i
+$$
 
-对于非约束自由度 `j`：
+$$
+K'[i, j] = 0,\qquad j \neq i
+$$
 
-```text
-F'[j] = F[j] - K[j, i] * u_i
-```
+对于非约束自由度 $j$：
+
+$$
+F'[j] = F[j] - K[j, i] \, u_i
+$$
 
 其中 `u_i` 为给定的位移边界值。求解该修改后的系统即可自动满足位移边界条件。
 
@@ -153,22 +158,21 @@ for dof, val in self.dirichlet_bcs:
 ### 2.5 动力学时间积分求解
 对于结构动力学运动方程：
 
-```text
-M * u''(t) + C * u'(t) + K * u(t) = F(t)
-```
+$$
+M \ddot{u}(t) + C \dot{u}(t) + K u(t) = F(t)
+$$
 
-系统采用经典的 **Newmark-beta 隐式积分法**。阻尼矩阵 `C` 基于 Rayleigh 比例阻尼模型构建：
+系统采用经典的 **Newmark-beta 隐式积分法**。阻尼矩阵 $C$ 基于 Rayleigh 比例阻尼模型构建：
 
-```text
-C = alpha * M + beta * K
-```
+$$
+C = \alpha M + \beta K
+$$
 
 算法参数取平均加速度法：
 
-```text
-gamma = 0.5
-beta  = 0.25
-```
+$$
+\gamma = 0.5,\quad \beta = 0.25
+$$
 
 上述参数组合可确保线性系统的无条件稳定性。
 
@@ -333,25 +337,25 @@ class GTDamagePredictor(nn.Module):
 
 FEM 损伤指标采用如下形式（基于刚度折减定义）：
 
-```text
-D_FEM(t, e) =
-  1 - |sigma_damaged(t, e)| / (|sigma_ref(t, e)| + epsilon)
-  = 1 - eta_hat_FEM(t, e)
-```
+$$
+D_{\mathrm{FEM}}(t, e)
+= 1 - \frac{\left|\sigma_{\mathrm{damaged}}(t, e)\right|}{\left|\sigma_{\mathrm{ref}}(t, e)\right| + \varepsilon}
+= 1 - \hat{\eta}_{\mathrm{FEM}}(t, e)
+$$
 
-深度学习模型输出的刚度因子记为 `eta_hat(t, e)`，对应损伤指标为：
+深度学习模型输出的刚度因子记为 $\hat{\eta}(t, e)$，对应损伤指标为：
 
-```text
-D_DL(t, e) = 1 - eta_hat(t, e)
-```
+$$
+D_{\mathrm{DL}}(t, e) = 1 - \hat{\eta}(t, e)
+$$
 
 **统一说明**：在同一载荷条件下，本实现采用应力比近似刚度折减系数：
 
-```text
-eta_hat_FEM ~= |sigma_damaged| / (|sigma_ref| + epsilon)
-```
+$$
+\hat{\eta}_{\mathrm{FEM}} \approx \frac{\left|\sigma_{\mathrm{damaged}}\right|}{\left|\sigma_{\mathrm{ref}}\right| + \varepsilon}
+$$
 
-这是一种工程近似，假设结构处于线弹性小变形状态，从而将深度学习侧预测的刚度因子 `eta_hat` 与 FEM 计算的应力比建立对应关系。
+这是一种工程近似，假设结构处于线弹性小变形状态，从而将深度学习侧预测的刚度因子 $\hat{\eta}$ 与 FEM 计算的应力比建立对应关系。
 
 ### 4.3 多源对比实验数据 (Metrics Analysis)
 
