@@ -17,10 +17,10 @@ This project now defaults to a stricter experimental protocol for damage-identif
 ## Recommended Commands
 
 ```bash
-python cli.py dataset -j 4
-python cli.py train --model gt --epochs 100
-python cli.py train --model pinn_v2 --epochs 100
-python cli.py predict
+run.bat dataset -j 4
+run.bat train --model gt --epochs 100
+run.bat train --model pinn_v2 --epochs 100
+run.bat predict
 ```
 
 ## Notes

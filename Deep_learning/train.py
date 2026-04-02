@@ -121,6 +121,14 @@ def _resolve_train_device(device_request: str) -> torch.device:
     raise ValueError(f"Unsupported device setting: {device_request}")
 
 
+def _resolve_cuda_device_index(device: torch.device) -> int:
+    if device.type != "cuda":
+        raise ValueError(f"Expected CUDA device, got: {device}")
+    if device.index is not None:
+        return int(device.index)
+    return 0
+
+
 def _seed_worker(worker_id: int, base_seed: int) -> None:
     worker_seed = int(base_seed) + int(worker_id)
     random.seed(worker_seed)
@@ -699,7 +707,7 @@ def main() -> None:
 
     device = _resolve_train_device(device_request)
     if device.type == 'cuda':
-        torch.cuda.set_device(device)
+        torch.cuda.set_device(_resolve_cuda_device_index(device))
     if amp_enabled and device.type != 'cuda':
         print("AMP requested but CUDA is not used. Falling back to FP32 training.")
         amp_enabled = False
