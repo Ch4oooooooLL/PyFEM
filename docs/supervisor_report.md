@@ -105,21 +105,21 @@ for i in range(1, self.num_steps):
 该图重生成命令：
 
 ```bash
-python PyFEM_Dynamics/postprocess/generate_vm_cloud.py --sample-id 0 --frame-step 10 --representative-frame 100
+python src/PyFEM_Dynamics/postprocess/generate_vm_cloud.py --sample-id 0 --frame-step 10 --representative-frame 100
 ```
 
 ---
 
 ### 1.5 详细代码路径（相对路径）
 
-- `PyFEM_Dynamics/pipeline/data_gen.py`
-- `PyFEM_Dynamics/solver/integrator.py`
-- `PyFEM_Dynamics/solver/assembler.py`
-- `PyFEM_Dynamics/solver/boundary.py`
-- `PyFEM_Dynamics/solver/stress_recovery.py`
-- `PyFEM_Dynamics/postprocess/generate_vm_cloud.py`
-- `dataset_config.yaml`
-- `structure.yaml`
+- `src/PyFEM_Dynamics/pipeline/data_gen.py`
+- `src/PyFEM_Dynamics/solver/integrator.py`
+- `src/PyFEM_Dynamics/solver/assembler.py`
+- `src/PyFEM_Dynamics/solver/boundary.py`
+- `src/PyFEM_Dynamics/solver/stress_recovery.py`
+- `src/PyFEM_Dynamics/postprocess/generate_vm_cloud.py`
+- `configs/dataset_config.yaml`
+- `configs/structure.yaml`
 - `dataset/metadata.json`
 
 ---
@@ -203,12 +203,12 @@ metrics = compute_metrics(all_preds, all_labels, threshold=threshold)
 
 ### 2.4 详细代码路径（相对路径）
 
-- `Deep_learning/data/dataset.py`
-- `Deep_learning/models/lstm_model.py`
-- `Deep_learning/models/pinn_model.py`
-- `Deep_learning/train.py`
-- `Deep_learning/utils/metrics.py`
-- `Deep_learning/utils/visualization.py`
+- `src/Deep_learning/data/dataset.py`
+- `src/Deep_learning/models/lstm_model.py`
+- `src/Deep_learning/models/pinn_model.py`
+- `src/Deep_learning/train.py`
+- `src/Deep_learning/utils/metrics.py`
+- `src/Deep_learning/utils/visualization.py`
 
 ---
 
@@ -283,7 +283,7 @@ $$
 ## 5. 复现实验命令
 
 ```bash
-python PyFEM_Dynamics/pipeline/data_gen.py
-python Deep_learning/train.py --model both --epochs 100 --threshold 0.95
-python Deep_learning/utils/visualization.py --checkpoints_dir Deep_learning/checkpoints --aggregate_all
+python src/PyFEM_Dynamics/pipeline/data_gen.py --config configs/dataset_config.yaml
+python src/Deep_learning/train.py --config configs/dataset_config.yaml --model both --epochs 100 --threshold 0.95
+python src/Deep_learning/utils/visualization.py --checkpoints_dir outputs/checkpoints --aggregate_all
 ```

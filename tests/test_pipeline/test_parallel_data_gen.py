@@ -10,9 +10,7 @@ import numpy as np
 import pytest
 import yaml
 
-import sys
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'PyFEM_Dynamics'))
-from pipeline.data_gen import generate_dataset, _generate_sample
+from PyFEM_Dynamics.pipeline.data_gen import generate_dataset, _generate_sample
 
 
 @pytest.fixture
@@ -73,7 +71,7 @@ def temp_config_file(minimal_config):
         
         minimal_config['output_file'] = os.path.join(output_dir, 'test.npz')
         
-        structure_path = os.path.join(os.path.dirname(__file__), '..', '..', 'structure.yaml')
+        structure_path = os.path.join(os.path.dirname(__file__), '..', '..', 'configs', 'structure.yaml')
         if os.path.exists(structure_path):
             import shutil
             shutil.copy(structure_path, os.path.join(tmpdir, 'structure.yaml'))

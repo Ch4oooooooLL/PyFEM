@@ -8,7 +8,8 @@ import os
 # Add project to path
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(os.path.dirname(SCRIPT_DIR))
-sys.path.insert(0, ROOT_DIR)
+SRC_ROOT = os.path.join(ROOT_DIR, 'src')
+sys.path.insert(0, SRC_ROOT)
 
 def test_imports():
     """Test that all new modules can be imported."""
@@ -24,10 +25,10 @@ def test_imports():
 def test_file_structure():
     """Verify all required files exist."""
     required_files = [
-        'Deep_learning/models/pinn_loss.py',
-        'Deep_learning/models/pinn_model_v2.py',
-        'Deep_learning/train_pinn_v2.py',
-        'Deep_learning/configs/pinn_v2.yaml',
+        'src/Deep_learning/models/pinn_loss.py',
+        'src/Deep_learning/models/pinn_model_v2.py',
+        'src/Deep_learning/train_pinn_v2.py',
+        'src/Deep_learning/configs/pinn_v2.yaml',
         'tests/test_models/test_pinn_loss.py',
         'tests/test_models/test_pinn_v2.py',
         'tests/test_pipeline/test_pinn_v2_training.py'
@@ -48,7 +49,7 @@ def test_config_valid():
     """Test that config file is valid YAML."""
     try:
         import yaml
-        config_path = os.path.join(ROOT_DIR, 'Deep_learning/configs/pinn_v2.yaml')
+        config_path = os.path.join(ROOT_DIR, 'src', 'Deep_learning', 'configs', 'pinn_v2.yaml')
         with open(config_path, 'r') as f:
             config = yaml.safe_load(f)
         

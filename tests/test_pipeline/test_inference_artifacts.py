@@ -7,13 +7,13 @@ import torch
 
 from Condition_prediction.inference.model_inference import ConditionDamagePredictor
 from Deep_learning.models.gt_model import GTDamagePredictor
-from core.io_parser import YAMLParser
+from PyFEM_Dynamics.core.io_parser import YAMLParser
 
 
 @pytest.fixture
 def structure_file() -> str:
     root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-    return os.path.join(root_dir, 'structure.yaml')
+    return os.path.join(root_dir, 'configs', 'structure.yaml')
 
 
 def test_condition_predictor_prefers_checkpoint_preprocessing(structure_file):

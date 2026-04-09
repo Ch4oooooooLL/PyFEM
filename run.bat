@@ -4,6 +4,7 @@ setlocal
 
 set "PROJECT_ROOT=%~dp0"
 cd /d "%PROJECT_ROOT%"
+set "PYTHONPATH=%PROJECT_ROOT%src;%PYTHONPATH%"
 
 set "TARGET_ENV=%FEM_CONDA_ENV%"
 if not defined TARGET_ENV (

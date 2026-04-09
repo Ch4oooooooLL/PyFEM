@@ -196,7 +196,7 @@ class TestDamageGeneration:
     def test_apply_damage_can_generate_healthy_sample(self):
         """Damage generation should support explicit healthy samples."""
         root_dir = os.path.join(os.path.dirname(__file__), '..', '..')
-        structure_file = os.path.abspath(os.path.join(root_dir, 'structure.yaml'))
+        structure_file = os.path.abspath(os.path.join(root_dir, 'configs', 'structure.yaml'))
         _, elements, _ = YAMLParser.build_structure_objects(structure_file)
         rng = np.random.default_rng(42)
 

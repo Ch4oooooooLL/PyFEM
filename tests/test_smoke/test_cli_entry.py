@@ -23,7 +23,7 @@ def test_run_wrappers_include_interactive_help_entrypoint() -> None:
 
 
 def test_tools_cli_defines_python_repl_prompt() -> None:
-    cli_source = (PROJECT_ROOT / "tools" / "cli.py").read_text(encoding="utf-8").lower()
+    cli_source = (PROJECT_ROOT / "src" / "tools" / "cli.py").read_text(encoding="utf-8").lower()
 
     assert "enter a command> " in cli_source
     assert "type `help`" in cli_source

@@ -21,7 +21,7 @@ def test_train_wizard_accepts_numeric_choices_and_defaults() -> None:
     assert namespace is not None
     assert namespace.command == "train"
     assert namespace.model == "pinn"
-    assert namespace.config == PROJECT_ROOT / "dataset_config.yaml"
+    assert namespace.config == PROJECT_ROOT / "configs" / "dataset_config.yaml"
     assert namespace.epochs == 5
     assert namespace.batch_size is None
     assert namespace.lr is None
@@ -41,7 +41,7 @@ def test_dataset_wizard_supports_back_navigation() -> None:
 
     assert namespace is not None
     assert namespace.command == "dataset"
-    assert namespace.config == PROJECT_ROOT / "dataset_config.yaml"
+    assert namespace.config == PROJECT_ROOT / "configs" / "dataset_config.yaml"
     assert namespace.jobs == 8
     assert namespace.seq is False
 

@@ -4,24 +4,35 @@
 
 ## 1. 项目概况
 本项目主要研究结构动力学仿真与数据驱动损伤识别的结合应用。内容由以下三个主要部分构成：
-*   **有限元计算内核** ([`./PyFEM_Dynamics`](./PyFEM_Dynamics)) —— 基于 Python 开发，实现了从几何参数化建模到动力学时程积分的数值仿真流程。
-*   **深度学习识别模块** ([`./Deep_learning`](./Deep_learning)) —— 采用图变换网络学习结构拓扑特征，实现对结构损伤状态的反向识别。
-*   **工况预测与多源对比模块** ([`./Condition_prediction`](./Condition_prediction)) —— 集成仿真与推理管线，支持在特定工况下对多源计算结果进行对比分析。
+*   **有限元计算内核** ([`./src/PyFEM_Dynamics`](./src/PyFEM_Dynamics)) —— 基于 Python 开发，实现了从几何参数化建模到动力学时程积分的数值仿真流程。
+*   **深度学习识别模块** ([`./src/Deep_learning`](./src/Deep_learning)) —— 采用图变换网络学习结构拓扑特征，实现对结构损伤状态的反向识别。
+*   **工况预测与多源对比模块** ([`./src/Condition_prediction`](./src/Condition_prediction)) —— 集成仿真与推理管线，支持在特定工况下对多源计算结果进行对比分析。
 
 ## 目录结构
 
 ```
 .
-├── PyFEM_Dynamics/          # FEM 计算内核
-│   ├── core/                # 核心类（节点、单元、材料）
-│   ├── solver/              # 求解器（组装、边界、积分）
-│   └── pipeline/            # 数据生成管线
-├── Deep_learning/           # 深度学习模块
-│   ├── models/              # GT 和 PINN 模型
-│   └── train.py             # 训练脚本
-├── Condition_prediction/    # 工况预测模块
-│   └── pipelines/           # 预测管线
-├── tools/                   # 统一 CLI 模块
+├── src/
+│   ├── PyFEM_Dynamics/      # FEM 计算内核
+│   │   ├── core/            # 核心类（节点、单元、材料）
+│   │   ├── solver/          # 求解器（组装、边界、积分）
+│   │   └── pipeline/        # 数据生成管线
+│   ├── Deep_learning/       # 深度学习模块
+│   │   ├── models/          # GT 和 PINN 模型
+│   │   └── train.py         # 训练脚本
+│   ├── Condition_prediction/# 工况预测模块
+│   │   └── pipelines/       # 预测管线
+│   └── tools/               # 统一 CLI 模块
+├── configs/                 # 统一配置目录
+│   ├── structure.yaml       # 结构配置文件
+│   ├── dataset_config.yaml  # 数据集生成配置
+│   └── condition_case.yaml  # 工况预测配置
+├── scripts/                 # 辅助脚本
+│   └── generate_fem_demo.py # 演示 GIF 生成脚本
+├── outputs/                 # 统一运行产物目录
+│   ├── checkpoints/         # 模型权重
+│   ├── inference/           # 工况预测输出
+│   └── postprocess/         # 后处理图像
 ├── notebooks/               # Jupyter Notebook 分析脚本
 │   ├── 01_structure_explorer.ipynb      # 结构可视化
 │   ├── 02_dataset_overview.ipynb        # 数据集概览
@@ -31,9 +42,8 @@
 │   ├── 06_model_comparison.ipynb        # 模型对比
 │   ├── 07_stress_analysis.ipynb         # 应力分析
 │   └── 08_interactive_dashboard.ipynb   # 交互式仪表板
-├── structure.yaml           # 结构配置文件
-├── dataset_config.yaml      # 数据集生成配置
-└── condition_case.yaml      # 工况预测配置
+├── dataset/                 # 生成的数据集
+└── tests/                   # 自动化测试
 ```
 
 ---
@@ -45,7 +55,7 @@
 ### 2.1 参数化建模与前处理
 模型通过 YAML 配置文件定义几何拓扑、材料属性（`E`、`rho`、`nu`）及边界约束。程序内部通过 `Node` 和 `Element` 对象建立力学关联。当前前处理流程支持 `random_multi_point` 随机工况生成：在非约束节点上随机选择载荷作用点与 `fx/fy` 方向，并在给定参数区间内采样幅值、频率、相位与时序参数；每个样本均作为独立工况进行求解。
 
-*   **节点构造片段** ([`./PyFEM_Dynamics/core/node.py`](./PyFEM_Dynamics/core/node.py)):
+*   **节点构造片段** ([`./src/PyFEM_Dynamics/core/node.py`](./src/PyFEM_Dynamics/core/node.py)):
 ```python
 class Node:
     def __init__(self, node_id: int, x: float, y: float):
@@ -56,10 +66,10 @@ class Node:
 ```
 
 *   **相关文件**: 
-    - [`./structure.yaml`](./structure.yaml): 结构配置文件。
-    - [`./PyFEM_Dynamics/core/io_parser.py`](./PyFEM_Dynamics/core/io_parser.py): 负责解析配置并自动构建节点与单元对象。
-    - [`./dataset_config.yaml`](./dataset_config.yaml): 随机多点载荷与参数区间配置文件。
-    - [`./PyFEM_Dynamics/pipeline/data_gen.py`](./PyFEM_Dynamics/pipeline/data_gen.py): 工况采样与数据集生成逻辑（当前规模 20,000 样本）。
+    - [`./configs/structure.yaml`](./configs/structure.yaml): 结构配置文件。
+    - [`./src/PyFEM_Dynamics/core/io_parser.py`](./src/PyFEM_Dynamics/core/io_parser.py): 负责解析配置并自动构建节点与单元对象。
+    - [`./configs/dataset_config.yaml`](./configs/dataset_config.yaml): 随机多点载荷与参数区间配置文件。
+    - [`./src/PyFEM_Dynamics/pipeline/data_gen.py`](./src/PyFEM_Dynamics/pipeline/data_gen.py): 工况采样与数据集生成逻辑（当前规模 20,000 样本）。
 
 ### 2.2 单元列式与矩阵计算
 针对二维拉压桁架单元，其在局部坐标系下的刚度矩阵 $k^e$ 和一致质量矩阵 $m^e$ 可写为：
@@ -84,7 +94,7 @@ m^e = \frac{\rho A L}{6}
 \end{bmatrix}
 $$
 
-*   **实现代码** ([`./PyFEM_Dynamics/core/element.py`](./PyFEM_Dynamics/core/element.py)):
+*   **实现代码** ([`./src/PyFEM_Dynamics/core/element.py`](./src/PyFEM_Dynamics/core/element.py)):
 ```python
 def get_local_stiffness(self):
     E, A, L = self.material.E, self.section.A, self.length
@@ -98,7 +108,7 @@ def get_local_stiffness(self):
 ```
 
 ### 2.3 全局矩阵组装
-利用**直接刚度法 (Direct Stiffness Method)** 将各单元贡献累加至全局矩阵 `K` 与 `M` 中。系统在 [`./PyFEM_Dynamics/solver/assembler.py`](./PyFEM_Dynamics/solver/assembler.py) 中提供了集中质量矩阵（Lumped Mass Matrix）的选项：
+利用**直接刚度法 (Direct Stiffness Method)** 将各单元贡献累加至全局矩阵 `K` 与 `M` 中。系统在 [`./src/PyFEM_Dynamics/solver/assembler.py`](./src/PyFEM_Dynamics/solver/assembler.py) 中提供了集中质量矩阵（Lumped Mass Matrix）的选项：
 
 $$
 m_{\mathrm{lumped}}^e = \frac{\rho A L}{2}
@@ -110,7 +120,7 @@ m_{\mathrm{lumped}}^e = \frac{\rho A L}{2}
 \end{bmatrix}
 $$
 
-*   **组装代码** ([`./PyFEM_Dynamics/solver/assembler.py`](./PyFEM_Dynamics/solver/assembler.py)):
+*   **组装代码** ([`./src/PyFEM_Dynamics/solver/assembler.py`](./src/PyFEM_Dynamics/solver/assembler.py)):
 ```python
 def assemble_K(self):
     K_global = sp.lil_matrix((self.total_dofs, self.total_dofs))
@@ -144,7 +154,7 @@ $$
 
 该方法相比罚函数法能更好地保证节点位移的精确解，避免了数值溢出风险。
 
-*   **实现代码** ([`./PyFEM_Dynamics/solver/boundary.py`](./PyFEM_Dynamics/solver/boundary.py)):
+*   **实现代码** ([`./src/PyFEM_Dynamics/solver/boundary.py`](./src/PyFEM_Dynamics/solver/boundary.py)):
 ```python
 # 边界处理核心片段 (简化版本)
 for dof in bc_dofs:
@@ -176,7 +186,7 @@ $$
 
 上述参数组合可确保线性系统的无条件稳定性。
 
-*   **核心求解逻辑** ([`./PyFEM_Dynamics/solver/integrator.py`](./PyFEM_Dynamics/solver/integrator.py)):
+*   **核心求解逻辑** ([`./src/PyFEM_Dynamics/solver/integrator.py`](./src/PyFEM_Dynamics/solver/integrator.py)):
 ```python
 # Newmark 积分常数
 a0 = 1.0 / (self.beta * self.dt**2)
@@ -228,8 +238,8 @@ for i in range(1, self.num_steps):
 
 ### 3.1 物理增强数据集生成
 利用 FEM 内联内核自动生成了 **20,000** 组包含不同损伤场景（单元随机折减）与随机多点激振的数据集。
-*   **数据生成代码**: [`./PyFEM_Dynamics/pipeline/data_gen.py`](./PyFEM_Dynamics/pipeline/data_gen.py)。
-*   **配置文件**: [`./dataset_config.yaml`](./dataset_config.yaml)。
+*   **数据生成代码**: [`./src/PyFEM_Dynamics/pipeline/data_gen.py`](./src/PyFEM_Dynamics/pipeline/data_gen.py)。
+*   **配置文件**: [`./configs/dataset_config.yaml`](./configs/dataset_config.yaml)。
 *   **数据文件**: [`./dataset/train.npz`](./dataset/train.npz)。
 
 ### 3.2 图变换网络 (Graph Transformer) 架构
@@ -238,7 +248,7 @@ for i in range(1, self.num_steps):
 2.  **空间关系推理**: 通过 Multi-Head Self-Attention 机制计算力学信号在物理结构中的全局传递关联。
 3.  **预测任务**: 针对每个单元预测其刚度折减系数（stiffness reduction factor，取值范围 0.5-0.9，具体由配置文件中的 reduction_range 决定）。
 
-*   **模型实现片段** ([`./Deep_learning/models/gt_model.py`](./Deep_learning/models/gt_model.py)):
+*   **模型实现片段** ([`./src/Deep_learning/models/gt_model.py`](./src/Deep_learning/models/gt_model.py)):
 ```python
 class GTDamagePredictor(nn.Module):
     def forward(self, x, adj, edge_index):
@@ -321,11 +331,11 @@ class GTDamagePredictor(nn.Module):
 在完成离线训练阶段后，本项目构建了集成化的工况预测模块，旨在特定载荷场景下实现有限元基准（FEM）、GT 模型及 PINN 预测结果的统一量化对比。
 
 ### 4.1 模块架构与逻辑入口
-*   **统一入口**: 根目录 [`run.bat`](./run.bat) / [`run.sh`](./run.sh)
-*   **工况配置**: [`condition_case.yaml`](./condition_case.yaml)
-*   **核心管线**: [`condition_pipeline.py`](./Condition_prediction/pipelines/condition_pipeline.py)
+*   **统一入口**: 根目录 [`run.bat`](./run.bat) / [`run.sh`](./run.sh)；安装后也可直接使用 `pyfem`
+*   **工况配置**: [`configs/condition_case.yaml`](./configs/condition_case.yaml)
+*   **核心管线**: [`condition_pipeline.py`](./src/Condition_prediction/pipelines/condition_pipeline.py)
 
-其中，[`./condition_case.yaml`](./condition_case.yaml) 统一定义了结构文件、时间参数、阻尼、载荷作用工况、损伤工况、模型推理设置以及输出路径。
+其中，[`./configs/condition_case.yaml`](./configs/condition_case.yaml) 统一定义了结构文件、时间参数、阻尼、载荷作用工况、损伤工况、模型推理设置以及输出路径。
 
 ### 4.2 统一计算流程
 该模块按以下步骤完成一次完整工况预测：
@@ -406,7 +416,7 @@ $$
 
 ### 5.0 统一 CLI 工具（推荐）
 
-项目现在以根目录 `run.bat` 和 `run.sh` 作为唯一公开入口，内部统一调度模块位于 `tools/cli.py`。启动时会优先复用当前激活的 conda 环境；如果当前不在项目环境中，则自动创建默认环境 `fem` 并安装依赖。
+项目现在以根目录 `run.bat` 和 `run.sh` 作为唯一公开入口，内部统一调度模块位于 `src/tools/cli.py`。启动时会优先复用当前激活的 conda 环境；如果当前不在项目环境中，则自动创建默认环境 `fem` 并安装依赖。
 
 ```bash
 # Windows
@@ -427,7 +437,7 @@ pipeline
 
 # 也支持直接参数模式：
 run.bat train --model gt --epochs 100 --device gpu
-run.bat predict --config condition_case.yaml
+run.bat predict --config configs/condition_case.yaml
 ```
 
 **CLI 命令速查：**
@@ -474,7 +484,7 @@ run.bat
 run.bat pipeline --skip-dataset --model both --epochs 150
 
 # 5. 仅运行预测（已有训练好的模型）
-run.bat predict --config condition_case.yaml
+run.bat predict --config configs/condition_case.yaml
 ```
 
 > **提示**：如果已激活项目 conda 环境，`run.bat` / `run.sh` 会直接复用当前环境；否则默认创建并使用 `fem` 环境。
@@ -489,7 +499,11 @@ conda create -n fem python=3.11 -y
 conda activate fem
 
 # 使用统一 CLI 安装依赖
-python -m tools.cli install --env-name fem
+PYTHONPATH=src python -m tools.cli install --env-name fem
+
+# 或安装项目后直接使用
+pip install -e .
+pyfem status
 ```
 
 ### 5.2 前置测试
@@ -514,19 +528,19 @@ pytest tests/test_pipeline/test_parallel_data_gen.py -v
 
 ### 5.3 数据生成
 
-训练模型需要先生成数据集。配置文件`dataset_config.yaml`定义了生成参数：
+训练模型需要先生成数据集。配置文件 `configs/dataset_config.yaml` 定义了生成参数：
 
 ```bash
 # 推荐：进入交互 CLI 后输入 `dataset`
 run.bat
 
 # 或直接参数模式
-run.bat dataset --config dataset_config.yaml -j 4
-run.bat dataset --config dataset_config.yaml --seq
+run.bat dataset --config configs/dataset_config.yaml -j 4
+run.bat dataset --config configs/dataset_config.yaml --seq
 ```
 
 **参数说明：**
-- `--config, -c`: 配置文件路径（默认：`dataset_config.yaml`）
+- `--config, -c`: 配置文件路径（默认：`configs/dataset_config.yaml`）
 - `--jobs, -j`: 并行worker数量，`-1`为自动（cpu_count - 1）
 - `--seq`: 启用串行模式（禁用并行）
 
@@ -545,16 +559,16 @@ run.bat dataset --config dataset_config.yaml --seq
 run.bat
 
 # 或直接参数模式
-run.bat train --config dataset_config.yaml --model gt --epochs 100 --device gpu
-run.bat train --config dataset_config.yaml --model pinn --epochs 100 --device cpu
-run.bat train --config dataset_config.yaml --model both --epochs 100 --device gpu
-run.bat train --config dataset_config.yaml --model gt --eval-only
+run.bat train --config configs/dataset_config.yaml --model gt --epochs 100 --device gpu
+run.bat train --config configs/dataset_config.yaml --model pinn --epochs 100 --device cpu
+run.bat train --config configs/dataset_config.yaml --model both --epochs 100 --device gpu
+run.bat train --config configs/dataset_config.yaml --model gt --eval-only
 ```
 
 **主要参数：**
 | 参数 | 说明 | 默认值 |
 |------|------|--------|
-| `--config` | 配置文件路径 | `dataset_config.yaml` |
+| `--config` | 配置文件路径 | `configs/dataset_config.yaml` |
 | `--model` | 模型类型：`gt`/`pinn`/`both` | 必填 |
 | `--epochs` | 训练轮数 | 从配置文件读取 |
 | `--batch_size` | 批大小 | 从配置文件读取 |
@@ -563,9 +577,9 @@ run.bat train --config dataset_config.yaml --model gt --eval-only
 | `--eval-only` | 仅评估，不训练 | False |
 
 **训练输出：**
-- `Deep_learning/checkpoints/gt_best.pth`: GT模型最佳权重
-- `Deep_learning/checkpoints/pinn_v2_best.pth`: PINN V2 模型最佳权重
-- `Deep_learning/checkpoints/pinn_best.pth`: 旧版 PINN 模型最佳权重
+- `outputs/checkpoints/gt_best.pth`: GT模型最佳权重
+- `outputs/checkpoints/pinn_v2_best.pth`: PINN V2 模型最佳权重
+- `outputs/checkpoints/pinn_best.pth`: 旧版 PINN 模型最佳权重
 - `runs/`: TensorBoard日志目录
 
 **监控训练：**
@@ -582,16 +596,16 @@ tensorboard --logdir runs/
 
 ```bash
 # 编辑工况配置
-# 修改 condition_case.yaml 中的载荷工况、损伤工况和模型路径
+# 修改 configs/condition_case.yaml 中的载荷工况、损伤工况和模型路径
 
 # 运行工况预测
-run.bat predict --config condition_case.yaml
+run.bat predict --config configs/condition_case.yaml
 
 # 指定输出目录
-run.bat predict --config condition_case.yaml --output-dir ./my_output
+run.bat predict --config configs/condition_case.yaml --output-dir ./my_output
 ```
 
-**配置文件`condition_case.yaml`关键项：**
+**配置文件`configs/condition_case.yaml`关键项：**
 ```yaml
 # 载荷工况
 load_case:
@@ -612,13 +626,13 @@ damage_case:
 deep_learning:
   inference:
     model_type: gt                              # 使用GT模型
-    checkpoint: Deep_learning/checkpoints/gt_best.pth
+    checkpoint: ../outputs/checkpoints/gt_best.pth
     threshold: 0.95
 ```
 
 **预测输出：**
 ```
-Condition_prediction/outputs/condition_case_a/
+outputs/inference/condition_case_a_YYYYMMDD_HHMMSS/
 ├── comparison_metrics.json            # 量化对比指标
 ├── mean_damage_comparison_all.png     # 损伤均值演化对比
 ├── error_evolution_all.png            # 误差演化对比
@@ -647,7 +661,7 @@ run.bat train --model gt --epochs 100 --device gpu
 run.bat predict
 
 # 6. 查看结果
-ls Condition_prediction/outputs/condition_case_a/
+ls outputs/inference/
 ```
 
 ---

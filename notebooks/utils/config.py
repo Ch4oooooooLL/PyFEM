@@ -4,9 +4,9 @@ _current_dir = os.path.dirname(os.path.abspath(__file__))
 _notebooks_dir = os.path.dirname(_current_dir)
 ROOT_DIR = os.path.dirname(_notebooks_dir)
 DATASET_PATH = os.path.join(ROOT_DIR, "dataset", "train.npz")
-STRUCTURE_PATH = os.path.join(ROOT_DIR, "structure.yaml")
-CONFIG_PATH = os.path.join(ROOT_DIR, "dataset_config.yaml")
-CHECKPOINT_DIR = os.path.join(ROOT_DIR, "Deep_learning", "checkpoints")
+STRUCTURE_PATH = os.path.join(ROOT_DIR, "configs", "structure.yaml")
+CONFIG_PATH = os.path.join(ROOT_DIR, "configs", "dataset_config.yaml")
+CHECKPOINT_DIR = os.path.join(ROOT_DIR, "outputs", "checkpoints")
 
 DT = 0.01
 TOTAL_TIME = 2.0

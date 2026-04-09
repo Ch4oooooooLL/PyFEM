@@ -20,11 +20,8 @@ __pycache__/
 
 # Datasets and postprocess outputs
 dataset/
-postprocess_results/
 *_bak/
-Deep_learning/checkpoints/
 Deep_learning/figures/report_*/
-Condition_prediction/outputs/
 
 # IDE and editor
 .planning/
@@ -35,3 +32,6 @@ Condition_prediction/outputs/
 
 # Jupyter
 .ipynb_checkpoints/
+
+# Codex local files
+.codex

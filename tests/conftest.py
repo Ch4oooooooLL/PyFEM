@@ -15,11 +15,11 @@ except ImportError:
 
 # Add project root to path for imports
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, PROJECT_ROOT)
+SRC_ROOT = os.path.join(PROJECT_ROOT, 'src')
+if SRC_ROOT not in sys.path:
+    sys.path.insert(0, SRC_ROOT)
 
 # Import FEM core classes
-sys.path.insert(0, os.path.join(PROJECT_ROOT, 'PyFEM_Dynamics'))
 from PyFEM_Dynamics.core.node import Node
 from PyFEM_Dynamics.core.element import TrussElement2D, BeamElement2D
 from PyFEM_Dynamics.core.material import Material

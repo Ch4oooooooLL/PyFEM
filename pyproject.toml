@@ -1,0 +1,70 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyfem-dynamics"
+version = "0.1.0"
+description = "2D structural dynamics simulation and damage identification workflows."
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+  { name = "PyFEM Contributors" }
+]
+dependencies = [
+  "numpy>=1.24.0",
+  "scipy>=1.10.0",
+  "matplotlib>=3.7.0",
+  "seaborn>=0.11.0",
+  "pyyaml>=6.0",
+  "torch>=2.0.0",
+  "tqdm>=4.65.0",
+  "rich>=13.0.0",
+  "ipywidgets>=8.0.0",
+  "jupyter>=1.0.0",
+  "ipython>=8.0.0",
+  "notebook>=6.4.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=7.0.0",
+  "pytest-cov>=4.0.0",
+]
+
+[project.scripts]
+pyfem = "tools.cli:main"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["PyFEM_Dynamics*", "Deep_learning*", "Condition_prediction*", "tools*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+  "-v",
+  "--tb=short",
+  "--strict-markers",
+  "--cov=PyFEM_Dynamics",
+  "--cov=Deep_learning",
+  "--cov-report=term-missing",
+  "--cov-report=html:htmlcov",
+]
+filterwarnings = [
+  "ignore::DeprecationWarning",
+  "ignore::PendingDeprecationWarning",
+]
+markers = [
+  "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+  "gpu: marks tests that require GPU",
+  "integration: marks tests as integration tests",
+]
